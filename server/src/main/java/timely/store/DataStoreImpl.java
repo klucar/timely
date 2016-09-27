@@ -1,71 +1,22 @@
 package timely.store;
 
-import static org.apache.accumulo.core.conf.AccumuloConfiguration.getMemoryInBytes;
-import static org.apache.accumulo.core.conf.AccumuloConfiguration.getTimeInMillis;
+import com.google.inject.Inject;
 import io.netty.handler.codec.http.HttpResponseStatus;
-
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.EnumSet;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Map.Entry;
-import java.util.Set;
-import java.util.SortedMap;
-import java.util.Timer;
-import java.util.TimerTask;
-import java.util.TreeMap;
-import java.util.TreeSet;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
-import org.apache.accumulo.core.client.BatchScanner;
-import org.apache.accumulo.core.client.BatchWriter;
-import org.apache.accumulo.core.client.BatchWriterConfig;
-import org.apache.accumulo.core.client.ClientConfiguration;
-import org.apache.accumulo.core.client.Connector;
-import org.apache.accumulo.core.client.Instance;
-import org.apache.accumulo.core.client.IteratorSetting;
-import org.apache.accumulo.core.client.MutationsRejectedException;
-import org.apache.accumulo.core.client.NamespaceExistsException;
+import org.apache.accumulo.core.client.*;
 import org.apache.accumulo.core.client.Scanner;
-import org.apache.accumulo.core.client.ScannerBase;
-import org.apache.accumulo.core.client.TableExistsException;
-import org.apache.accumulo.core.client.TableNotFoundException;
-import org.apache.accumulo.core.client.ZooKeeperInstance;
-import org.apache.accumulo.core.client.security.tokens.PasswordToken;
-import org.apache.accumulo.core.data.Key;
-import org.apache.accumulo.core.data.Mutation;
-import org.apache.accumulo.core.data.PartialKey;
-import org.apache.accumulo.core.data.Range;
-import org.apache.accumulo.core.data.Value;
-import org.apache.accumulo.core.iterators.IteratorUtil.IteratorScope;
+import org.apache.accumulo.core.data.*;
 import org.apache.accumulo.core.iterators.user.RegExFilter;
 import org.apache.accumulo.core.security.Authorizations;
 import org.apache.accumulo.core.util.Pair;
-import org.apache.commons.configuration.BaseConfiguration;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.hadoop.io.Text;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import timely.Configuration;
-import timely.Server;
 import timely.adapter.accumulo.MetricAdapter;
+import timely.adapter.accumulo.MetricWriter;
+import timely.adapter.accumulo.TableHelper;
 import timely.api.model.Meta;
-import timely.model.Metric;
-import timely.model.Tag;
 import timely.api.request.AuthenticatedRequest;
 import timely.api.request.timeseries.QueryRequest;
 import timely.api.request.timeseries.QueryRequest.RateOption;
@@ -78,11 +29,24 @@ import timely.api.response.timeseries.SearchLookupResponse;
 import timely.api.response.timeseries.SearchLookupResponse.Result;
 import timely.api.response.timeseries.SuggestResponse;
 import timely.auth.AuthCache;
+import timely.model.Metric;
+import timely.model.Tag;
 import timely.sample.Aggregator;
 import timely.sample.Downsample;
 import timely.sample.Sample;
 import timely.sample.iterators.DownsampleIterator;
 import timely.util.MetaKeySet;
+
+import java.io.IOException;
+import java.util.*;
+import java.util.Map.Entry;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+import static org.apache.accumulo.core.conf.AccumuloConfiguration.getTimeInMillis;
 
 public class DataStoreImpl implements DataStore {
 
@@ -92,95 +56,43 @@ public class DataStoreImpl implements DataStore {
     private static final long DEFAULT_DOWNSAMPLE_MS = 60000;
     private static final Pattern REGEX_TEST = Pattern.compile("^\\w+$");
 
-    /*
-     * Pair doesn't implement Comparable
-     */
-    private static class MetricTagK extends Pair<String, String> implements Comparable<MetricTagK> {
+    @Inject
+    TableHelper tableHelper;
 
-        public MetricTagK(String f, String s) {
-            super(f, s);
-        }
+    @Inject
+    MetricWriter metricWriter;
 
-        @Override
-        public int compareTo(MetricTagK o) {
-            int result = getFirst().compareTo(o.getFirst());
-            if (result != 0) {
-                return result;
-            }
-            return getSecond().compareTo(o.getSecond());
-        }
+    @Inject
+    Configuration configuration; // todo remove?
 
-    }
+    @Inject
+    Connector connector; // todo remove?
 
-    private final Connector connector;
     private MetaCache metaCache = null;
     private final AtomicLong lastCountTime = new AtomicLong(System.currentTimeMillis());
     private final AtomicReference<SortedMap<MetricTagK, Integer>> metaCounts = new AtomicReference<>(new TreeMap<>());
-    private final String metricsTable;
-    private final String metaTable;
     private final InternalMetrics internalMetrics = new InternalMetrics();
     private final Timer internalMetricsTimer = new Timer(true);
     private final int scannerThreads;
-    private final BatchWriterConfig bwConfig;
-    private final List<BatchWriter> writers = new ArrayList<>();
-    private final ThreadLocal<BatchWriter> metaWriter = new ThreadLocal<>();
-    private final ThreadLocal<BatchWriter> batchWriter = new ThreadLocal<>();
     private boolean anonAccessAllowed = false;
 
-    public DataStoreImpl(Configuration conf, int numWriteThreads) throws TimelyException {
+    private final String metaTable;
+    private final String metricsTable;
+
+    public DataStoreImpl(Configuration conf) throws TimelyException {
 
         try {
-            final BaseConfiguration apacheConf = new BaseConfiguration();
-            Configuration.Accumulo accumuloConf = conf.getAccumulo();
-            apacheConf.setProperty("instance.name", accumuloConf.getInstanceName());
-            apacheConf.setProperty("instance.zookeeper.host", accumuloConf.getZookeepers());
-            final ClientConfiguration aconf = new ClientConfiguration(Collections.singletonList(apacheConf));
-            final Instance instance = new ZooKeeperInstance(aconf);
-            connector = instance
-                    .getConnector(accumuloConf.getUsername(), new PasswordToken(accumuloConf.getPassword()));
-            bwConfig = new BatchWriterConfig();
-            bwConfig.setMaxLatency(getTimeInMillis(accumuloConf.getWrite().getLatency()), TimeUnit.MILLISECONDS);
-            bwConfig.setMaxMemory(getMemoryInBytes(accumuloConf.getWrite().getBufferSize()) / numWriteThreads);
-            bwConfig.setMaxWriteThreads(accumuloConf.getWrite().getThreads());
-            scannerThreads = accumuloConf.getScan().getThreads();
+            metaTable = configuration.getMetaTable();
+            metricsTable = configuration.getMetricsTable();
+
+            scannerThreads = configuration.getAccumulo().getScan().getThreads();
+
             anonAccessAllowed = conf.getSecurity().isAllowAnonymousAccess();
 
-            metricsTable = conf.getMetricsTable();
-            if (metricsTable.contains(".")) {
-                final String[] parts = metricsTable.split("\\.", 2);
-                final String namespace = parts[0];
-                if (!connector.namespaceOperations().exists(namespace)) {
-                    try {
-                        LOG.info("Creating namespace " + namespace);
-                        connector.namespaceOperations().create(namespace);
-                    } catch (final NamespaceExistsException ex) {
-                        // don't care
-                    }
-                }
+            for (String table : new String[] { conf.getMetricsTable(), conf.getMetaTable() }) {
+                tableHelper.createNamespaceFromTableName(table);
+                tableHelper.createTableIfNotExists(table);
             }
-            final Map<String, String> tableIdMap = connector.tableOperations().tableIdMap();
-            if (!tableIdMap.containsKey(metricsTable)) {
-                try {
-                    LOG.info("Creating table " + metricsTable);
-                    connector.tableOperations().create(metricsTable);
-                } catch (final TableExistsException ex) {
-                    // don't care
-                }
-            }
-            this.removeAgeOffIterators(connector, metricsTable);
-            this.applyAgeOffIterator(connector, metricsTable, conf);
-
-            metaTable = conf.getMetaTable();
-            if (!tableIdMap.containsKey(metaTable)) {
-                try {
-                    LOG.info("Creating table " + metaTable);
-                    connector.tableOperations().create(metaTable);
-                } catch (final TableExistsException ex) {
-                    // don't care
-                }
-            }
-            this.removeAgeOffIterators(connector, metaTable);
-            this.applyAgeOffIterator(connector, metaTable, conf);
 
             internalMetricsTimer.schedule(new TimerTask() {
 
@@ -197,52 +109,9 @@ public class DataStoreImpl implements DataStore {
         }
     }
 
-    private static final EnumSet<IteratorScope> AGEOFF_SCOPES = EnumSet.allOf(IteratorScope.class);
-
-    private void removeAgeOffIterators(Connector con, String tableName) throws Exception {
-        Map<String, EnumSet<IteratorScope>> iters = con.tableOperations().listIterators(tableName);
-        for (String name : iters.keySet()) {
-            if (name.startsWith("ageoff")) {
-                con.tableOperations().removeIterator(tableName, name, AGEOFF_SCOPES);
-            }
-        }
-    }
-
-    private void applyAgeOffIterator(Connector con, String tableName, Configuration config) throws Exception {
-        int priority = 100;
-        Map<String, String> ageOffOptions = new HashMap<>();
-        for (Entry<String, Integer> e : config.getMetricAgeOffDays().entrySet()) {
-            String ageoff = Long.toString(e.getValue() * 86400000L);
-            ageOffOptions.put(MetricAgeOffFilter.AGE_OFF_PREFIX + e.getKey(), ageoff);
-        }
-        IteratorSetting ageOffIteratorSettings = new IteratorSetting(priority, "ageoff", MetricAgeOffFilter.class,
-                ageOffOptions);
-        connector.tableOperations().attachIterator(tableName, ageOffIteratorSettings, AGEOFF_SCOPES);
-    }
-
     @Override
     public void store(Metric metric) {
         LOG.trace("Received Store Request for: {}", metric);
-        if (null == metaWriter.get()) {
-            try {
-                BatchWriter w = connector.createBatchWriter(metaTable, bwConfig);
-                metaWriter.set(w);
-                writers.add(w);
-            } catch (TableNotFoundException e) {
-                LOG.error("Error creating meta batch writer", e);
-                return;
-            }
-        }
-        if (null == batchWriter.get()) {
-            try {
-                BatchWriter w = connector.createBatchWriter(metricsTable, bwConfig);
-                batchWriter.set(w);
-                writers.add(w);
-            } catch (TableNotFoundException e) {
-                LOG.error("Error creating metric batch writer", e);
-                return;
-            }
-        }
 
         internalMetrics.incrementMetricsReceived(1);
         List<Meta> toCache = new ArrayList<>(metric.getTags().size());
@@ -253,69 +122,35 @@ public class DataStoreImpl implements DataStore {
             }
         }
         if (!toCache.isEmpty()) {
-            final Set<Mutation> muts = new TreeSet<>(new Comparator<Mutation>() {
-
-                @Override
-                public int compare(Mutation o1, Mutation o2) {
-                    if (o1.equals(o2)) {
-                        return 0;
+            final Set<Mutation> muts = new TreeSet<>((o1, o2) -> {
+                if (o1.equals(o2)) {
+                    return 0;
+                } else {
+                    if (o1.hashCode() < o2.hashCode()) {
+                        return -1;
                     } else {
-                        if (o1.hashCode() < o2.hashCode()) {
-                            return -1;
-                        } else {
-                            return 1;
-                        }
+                        return 1;
                     }
                 }
             });
             MetaKeySet mks = new MetaKeySet();
             toCache.forEach(m -> mks.addAll(m.toKeys()));
-            internalMetrics.incrementMetaKeysInserted(mks.size());
             muts.addAll(mks.toMutations());
-            try {
-                metaWriter.get().addMutations(muts);
-            } catch (MutationsRejectedException e) {
-                LOG.error("Unable to write to meta table", e);
-                try {
-                    try {
-                        final BatchWriter w = metaWriter.get();
-                        metaWriter.remove();
-                        writers.remove(w);
-                        w.close();
-                    } catch (MutationsRejectedException e1) {
-                        LOG.error("Error closing meta writer", e1);
-                    }
-                    final BatchWriter w = connector.createBatchWriter(metaTable, bwConfig);
-                    metaWriter.set(w);
-                    writers.add(w);
-                } catch (TableNotFoundException e1) {
-                    Server.fatal("Unexpected error recreating meta batch writer, shutting down Timely server", e1);
-                }
-            }
-            metaCache.addAll(toCache);
-        }
-        try {
 
-            batchWriter.get().addMutation(MetricAdapter.toMutation(metric));
-            internalMetrics.incrementMetricKeysInserted(metric.getTags().size());
-        } catch (MutationsRejectedException e) {
-            LOG.error("Unable to write to metrics table", e);
-            try {
-                try {
-                    final BatchWriter w = batchWriter.get();
-                    batchWriter.remove();
-                    writers.remove(w);
-                    w.close();
-                } catch (MutationsRejectedException e1) {
-                    LOG.error("Error closing metric writer", e1);
-                }
-                final BatchWriter w = connector.createBatchWriter(metricsTable, bwConfig);
-                batchWriter.set(w);
-                writers.add(w);
-            } catch (TableNotFoundException e1) {
-                Server.fatal("Unexpected error recreating metrics batch writer, shutting down Timely server", e1);
+            if (metricWriter.writeMetaMutations(muts)) {
+                internalMetrics.incrementMetaKeysInserted(mks.size());
+                metaCache.addAll(toCache);
+            } else {
+                LOG.error("unable to write metric meta mutations: {}", metric);
             }
         }
+
+        if (metricWriter.writeMetricMutation(metric)) {
+            internalMetrics.incrementMetricKeysInserted(metric.getTags().size());
+        } else {
+            LOG.error("unable to write metric to table: {} ", metric);
+        }
+
     }
 
     private static final long FIVE_MINUTES_IN_MS = TimeUnit.MINUTES.toMillis(5);
@@ -378,14 +213,7 @@ public class DataStoreImpl implements DataStore {
     @Override
     public void flush() {
         internalMetricsTimer.cancel();
-        writers.forEach(w -> {
-            try {
-                w.close();
-            } catch (final Exception ex) {
-                LOG.warn("Error shutting down batchwriter", ex);
-            }
-
-        });
+        metricWriter.flushWriters();
     }
 
     @Override
@@ -811,6 +639,26 @@ public class DataStoreImpl implements DataStore {
             throw new TimelyException(HttpResponseStatus.INTERNAL_SERVER_ERROR.code(), "Error during lookup: "
                     + ex.getMessage(), ex.getMessage(), ex);
         }
+    }
+
+    /*
+     * Pair doesn't implement Comparable
+     */
+    private static class MetricTagK extends Pair<String, String> implements Comparable<MetricTagK> {
+
+        public MetricTagK(String f, String s) {
+            super(f, s);
+        }
+
+        @Override
+        public int compareTo(MetricTagK o) {
+            int result = getFirst().compareTo(o.getFirst());
+            if (result != 0) {
+                return result;
+            }
+            return getSecond().compareTo(o.getSecond());
+        }
+
     }
 
 }

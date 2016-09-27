@@ -31,7 +31,7 @@ public class DataStoreIT extends OneWaySSLBase {
         ageOffSettings.put("default", 1);
         conf.setMetricAgeOffDays(ageOffSettings);
 
-        final Server s = new Server(conf);
+        final Server s = new Server();
         s.run();
         try {
             put("sys.cpu.user " + TEST_TIME + " 1.0 tag1=value1 tag2=value2", "sys.cpu.user " + (TEST_TIME + ONE_HOUR)

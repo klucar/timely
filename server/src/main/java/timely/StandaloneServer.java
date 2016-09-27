@@ -2,7 +2,9 @@ package timely;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
 
+import com.google.inject.Inject;
 import org.apache.accumulo.core.client.AccumuloException;
 import org.apache.accumulo.core.client.AccumuloSecurityException;
 import org.apache.accumulo.core.client.Connector;
@@ -14,15 +16,21 @@ import org.apache.accumulo.minicluster.MiniAccumuloConfig;
 import org.apache.accumulo.minicluster.ServerType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import timely.validator.TimelyServer;
 
-public class StandaloneServer extends Server {
+public class StandaloneServer implements TimelyServer {
 
     private static final Logger LOG = LoggerFactory.getLogger(StandaloneServer.class);
 
     private static MiniAccumuloCluster mac = null;
 
-    public StandaloneServer(Configuration conf) throws Exception {
-        super(conf);
+    @Inject
+    private Configuration config;
+
+    private final Server server;
+
+    public StandaloneServer() {
+        server = new Server();
     }
 
     @Override
@@ -34,28 +42,24 @@ public class StandaloneServer extends Server {
             System.err.println("Error stopping MiniAccumuloCluster");
             e.printStackTrace();
         }
-        super.shutdown();
+        server.shutdown();
     }
 
-    private static String usage() {
-        return "StandaloneServer <directory>";
-    }
-
-    public static void main(String[] args) {
-        if (args.length < 1) {
-            System.err.println(usage());
-        }
-        File tmp = new File(args[0]);
-        if (!tmp.canWrite()) {
-            System.err.println("Unable to write to directory: " + tmp);
+    @Override
+    public void setup() {
+        File tempDir = null;
+        try {
+            tempDir = Files.createTempDirectory("timely_standalone_mac_temp").toFile();
+            tempDir.deleteOnExit();
+            LOG.info("Starting MiniAccumuloCluster in directory: {}", tempDir);
+        } catch (IOException e) {
+            System.err.println("Unable to create temp directory for mini accumulo cluster");
             System.exit(1);
         }
 
-        Configuration conf = initializeConfiguration(args);
-
-        File accumuloDir = new File(tmp, "accumulo");
-        MiniAccumuloConfig macConfig = new MiniAccumuloConfig(accumuloDir, "secret");
-        macConfig.setInstanceName("TimelyStandalone");
+        File accumuloDir = new File(tempDir, "accumulo");
+        MiniAccumuloConfig macConfig = new MiniAccumuloConfig(accumuloDir, config.getAccumulo().getPassword());
+        macConfig.setInstanceName(config.getAccumulo().getInstanceName());
         macConfig.setZooKeeperPort(9804);
         macConfig.setNumTservers(1);
         macConfig.setMemory(ServerType.TABLET_SERVER, 1, MemoryUnit.GIGABYTE);
@@ -71,28 +75,22 @@ public class StandaloneServer extends Server {
             System.err.println("Error starting MiniAccumuloCluster: " + e.getMessage());
             System.exit(1);
         }
+
         try {
-            Connector conn = mac.getConnector("root", "secret");
+            Connector conn = mac.getConnector(config.getAccumulo().getUsername(), config.getAccumulo().getPassword());
             SecurityOperations sops = conn.securityOperations();
             Authorizations rootAuths = new Authorizations("A", "B", "C", "D", "E", "F", "G", "H", "I");
-            sops.changeUserAuthorizations("root", rootAuths);
+            sops.changeUserAuthorizations(config.getAccumulo().getUsername(), rootAuths);
         } catch (AccumuloException | AccumuloSecurityException e) {
             System.err.println("Error configuring root user");
             System.exit(1);
         }
-        try {
-            LOG.info("Starting StandaloneServer");
-            StandaloneServer s = new StandaloneServer(conf);
-            s.run();
-        } catch (Exception e) {
-            System.err.println("Error starting server");
-            e.printStackTrace();
-            System.exit(1);
-        }
-        try {
-            LATCH.await();
-        } catch (InterruptedException e) {
-            LOG.info("Server shutting down.");
-        }
+
+        server.setup();
+    }
+
+    @Override
+    public void run() throws Exception {
+        server.run();
     }
 }

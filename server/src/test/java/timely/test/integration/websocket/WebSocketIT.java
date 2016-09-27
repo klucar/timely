@@ -166,7 +166,7 @@ public class WebSocketIT extends OneWaySSLBase {
 
     @Before
     public void setup() throws Exception {
-        s = new Server(conf);
+        s = new Server();
         s.run();
         this.sessionId = UUID.randomUUID().toString();
         AuthCache.getCache().put(sessionId, new UsernamePasswordAuthenticationToken("test", "test1"));

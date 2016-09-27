@@ -1,5 +1,6 @@
 package timely;
 
+import com.google.inject.Inject;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.buffer.PooledByteBufAllocator;
@@ -15,60 +16,26 @@ import io.netty.channel.socket.nio.NioDatagramChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.handler.codec.DelimiterBasedFrameDecoder;
 import io.netty.handler.codec.Delimiters;
-import io.netty.handler.codec.http.HttpContentCompressor;
-import io.netty.handler.codec.http.HttpContentDecompressor;
-import io.netty.handler.codec.http.HttpMethod;
-import io.netty.handler.codec.http.HttpObjectAggregator;
+import io.netty.handler.codec.http.*;
 import io.netty.handler.codec.http.HttpRequestDecoder;
-import io.netty.handler.codec.http.HttpResponseEncoder;
-import io.netty.handler.codec.http.HttpServerCodec;
 import io.netty.handler.codec.http.cors.CorsConfig;
 import io.netty.handler.codec.http.cors.CorsHandler;
 import io.netty.handler.codec.http.websocketx.WebSocketServerProtocolHandler;
 import io.netty.handler.logging.LoggingHandler;
-import io.netty.handler.ssl.ClientAuth;
-import io.netty.handler.ssl.OpenSslServerContext;
-import io.netty.handler.ssl.OpenSslServerSessionContext;
-import io.netty.handler.ssl.SslContext;
-import io.netty.handler.ssl.SslContextBuilder;
-import io.netty.handler.ssl.SslProvider;
+import io.netty.handler.ssl.*;
 import io.netty.handler.ssl.util.SelfSignedCertificate;
 import io.netty.handler.stream.ChunkedWriteHandler;
 import io.netty.handler.timeout.IdleStateHandler;
 import io.netty.util.internal.SystemPropertyUtil;
-
-import java.io.File;
-import java.net.InetSocketAddress;
-import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.List;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.builder.SpringApplicationBuilder;
-import org.springframework.context.ConfigurableApplicationContext;
-
 import timely.api.response.TimelyException;
 import timely.auth.AuthCache;
 import timely.auth.VisibilityCache;
-import timely.netty.http.HttpMetricPutHandler;
-import timely.netty.http.HttpStaticFileServerHandler;
-import timely.netty.http.HttpVersionRequestHandler;
-import timely.netty.http.NonSecureHttpHandler;
-import timely.netty.http.StrictTransportHandler;
-import timely.netty.http.TimelyExceptionHandler;
+import timely.netty.http.*;
 import timely.netty.http.auth.BasicAuthLoginRequestHandler;
 import timely.netty.http.auth.X509LoginRequestHandler;
-import timely.netty.http.timeseries.HttpAggregatorsRequestHandler;
-import timely.netty.http.timeseries.HttpMetricsRequestHandler;
-import timely.netty.http.timeseries.HttpQueryRequestHandler;
-import timely.netty.http.timeseries.HttpSearchLookupRequestHandler;
-import timely.netty.http.timeseries.HttpSuggestRequestHandler;
+import timely.netty.http.timeseries.*;
 import timely.netty.tcp.MetricsBufferDecoder;
 import timely.netty.tcp.TcpDecoder;
 import timely.netty.tcp.TcpPutHandler;
@@ -83,16 +50,22 @@ import timely.netty.websocket.subscription.WSAddSubscriptionRequestHandler;
 import timely.netty.websocket.subscription.WSCloseSubscriptionRequestHandler;
 import timely.netty.websocket.subscription.WSCreateSubscriptionRequestHandler;
 import timely.netty.websocket.subscription.WSRemoveSubscriptionRequestHandler;
-import timely.netty.websocket.timeseries.WSAggregatorsRequestHandler;
-import timely.netty.websocket.timeseries.WSMetricsRequestHandler;
-import timely.netty.websocket.timeseries.WSQueryRequestHandler;
-import timely.netty.websocket.timeseries.WSSearchLookupRequestHandler;
-import timely.netty.websocket.timeseries.WSSuggestRequestHandler;
+import timely.netty.websocket.timeseries.*;
 import timely.store.DataStore;
 import timely.store.DataStoreFactory;
 import timely.store.MetaCacheFactory;
+import timely.validator.TimelyServer;
 
-public class Server {
+import java.io.File;
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+
+public class Server implements TimelyServer {
 
     private static final Logger LOG = LoggerFactory.getLogger(Server.class);
     private static final int EPOLL_MIN_MAJOR_VERSION = 2;
@@ -102,10 +75,9 @@ public class Server {
     private static final String OS_VERSION = "os.version";
     private static final String WS_PATH = "/websocket";
 
-    protected static final CountDownLatch LATCH = new CountDownLatch(1);
-    static ConfigurableApplicationContext applicationContext;
+    @Inject
+    private Configuration config;
 
-    private final Configuration config;
     private EventLoopGroup tcpWorkerGroup = null;
     private EventLoopGroup tcpBossGroup = null;
     private EventLoopGroup httpWorkerGroup = null;
@@ -114,78 +86,19 @@ public class Server {
     private EventLoopGroup wsBossGroup = null;
     private EventLoopGroup udpBossGroup = null;
     private EventLoopGroup udpWorkerGroup = null;
-    protected Channel tcpChannelHandle = null;
-    protected Channel httpChannelHandle = null;
-    protected Channel wsChannelHandle = null;
-    protected Channel udpChannelHandle = null;
-    protected DataStore dataStore = null;
-    protected volatile boolean shutdown = false;
+    private Channel tcpChannelHandle = null;
+    private Channel httpChannelHandle = null;
+    private Channel wsChannelHandle = null;
+    private Channel udpChannelHandle = null;
+    private Class<? extends ServerSocketChannel> channelClass = null;
+    private Class<? extends Channel> datagramChannelClass = null;
 
-    private static boolean useEpoll() {
+    private DataStore dataStore = null;
 
-        // Should we just return true if this is Linux and if we get an error
-        // during Epoll
-        // setup handle it there?
-        final String os = SystemPropertyUtil.get(OS_NAME).toLowerCase().trim();
-        final String[] version = SystemPropertyUtil.get(OS_VERSION).toLowerCase().trim().split("\\.");
-        if (os.startsWith("linux") && version.length >= 3) {
-            final int major = Integer.parseInt(version[0]);
-            if (major > EPOLL_MIN_MAJOR_VERSION) {
-                return true;
-            } else if (major == EPOLL_MIN_MAJOR_VERSION) {
-                final int minor = Integer.parseInt(version[1]);
-                if (minor > EPOLL_MIN_MINOR_VERSION) {
-                    return true;
-                } else if (minor == EPOLL_MIN_MINOR_VERSION) {
-                    final int patch = Integer.parseInt(version[2].substring(0, 2));
-                    return patch >= EPOLL_MIN_PATCH_VERSION;
-                } else {
-                    return false;
-                }
-            } else {
-                return false;
-            }
-        } else {
-            return false;
-        }
+    public Server() {
     }
 
-    public static void fatal(String msg, Throwable t) {
-        LOG.error(msg, t);
-        LATCH.countDown();
-    }
-
-    public static void main(String[] args) throws Exception {
-
-        Configuration conf = initializeConfiguration(args);
-
-        Server s = new Server(conf);
-        s.run();
-        try {
-            LATCH.await();
-        } catch (final InterruptedException e) {
-            LOG.info("Server shutting down.");
-        } finally {
-            s.shutdown();
-        }
-    }
-
-    protected static Configuration initializeConfiguration(String[] args) {
-        applicationContext = new SpringApplicationBuilder(SpringBootstrap.class).web(false).run(args);
-        return applicationContext.getBean(Configuration.class);
-    }
-
-    private void shutdownHook() {
-
-        final Runnable shutdownRunner = () -> {
-            if (!shutdown) {
-                shutdown();
-            }
-        };
-        final Thread hook = new Thread(shutdownRunner, "shutdown-hook-thread");
-        Runtime.getRuntime().addShutdownHook(hook);
-    }
-
+    @Override
     public void shutdown() {
         List<ChannelFuture> channelFutures = new ArrayList<>();
 
@@ -260,24 +173,12 @@ public class Server {
 
         LOG.info("Closing WebSocketRequestDecoder");
         WebSocketRequestDecoder.close();
-        if (applicationContext != null) {
-            LOG.info("Closing applicationContext");
-            applicationContext.close();
-        }
-        this.shutdown = true;
+
         LOG.info("Server shut down.");
     }
 
-    public Server(Configuration conf) throws Exception {
-
-        this.config = conf;
-    }
-
-    public void run() throws Exception {
-
-        int nettyThreads = Math.max(1,
-                SystemPropertyUtil.getInt("io.netty.eventLoopThreads", Runtime.getRuntime().availableProcessors() * 2));
-        dataStore = DataStoreFactory.create(config, nettyThreads);
+    @Override
+    public void setup() {
         // Initialize the MetaCache
         MetaCacheFactory.getCache(config);
         // initialize the auth cache
@@ -285,8 +186,6 @@ public class Server {
         // Initialize the VisibilityCache
         VisibilityCache.init(config);
         final boolean useEpoll = useEpoll();
-        Class<? extends ServerSocketChannel> channelClass;
-        Class<? extends Channel> datagramChannelClass;
         if (useEpoll) {
             tcpWorkerGroup = new EpollEventLoopGroup();
             tcpBossGroup = new EpollEventLoopGroup();
@@ -311,6 +210,14 @@ public class Server {
             datagramChannelClass = NioDatagramChannel.class;
         }
         LOG.info("Using channel class {}", channelClass.getSimpleName());
+    }
+
+    @Override
+    public void run() throws Exception {
+        int nettyThreads = Math.max(1,
+                SystemPropertyUtil.getInt("io.netty.eventLoopThreads", Runtime.getRuntime().availableProcessors() * 2));
+        config.getAccumulo().getWrite().setThreads(nettyThreads);
+        dataStore = DataStoreFactory.create(config);
 
         final ServerBootstrap tcpServer = new ServerBootstrap();
         tcpServer.group(tcpBossGroup, tcpWorkerGroup);
@@ -371,7 +278,6 @@ public class Server {
         udpChannelHandle = udpServer.bind(udpIp, udpPort).sync().channel();
         final String udpAddress = ((InetSocketAddress) wsChannelHandle.localAddress()).getAddress().getHostAddress();
 
-        shutdownHook();
         LOG.info(
                 "Server started. Listening on {}:{} for TCP traffic, {}:{} for HTTP traffic, {}:{} for WebSocket traffic, and {}:{} for UDP traffic",
                 tcpAddress, tcpPort, httpAddress, httpPort, wsAddress, wsPort, udpAddress, udpPort);
@@ -524,6 +430,35 @@ public class Server {
             }
         };
 
+    }
+
+    private static boolean useEpoll() {
+
+        // Should we just return true if this is Linux and if we get an error
+        // during Epoll
+        // setup handle it there?
+        final String os = SystemPropertyUtil.get(OS_NAME).toLowerCase().trim();
+        final String[] version = SystemPropertyUtil.get(OS_VERSION).toLowerCase().trim().split("\\.");
+        if (os.startsWith("linux") && version.length >= 3) {
+            final int major = Integer.parseInt(version[0]);
+            if (major > EPOLL_MIN_MAJOR_VERSION) {
+                return true;
+            } else if (major == EPOLL_MIN_MAJOR_VERSION) {
+                final int minor = Integer.parseInt(version[1]);
+                if (minor > EPOLL_MIN_MINOR_VERSION) {
+                    return true;
+                } else if (minor == EPOLL_MIN_MINOR_VERSION) {
+                    final int patch = Integer.parseInt(version[2].substring(0, 2));
+                    return patch >= EPOLL_MIN_PATCH_VERSION;
+                } else {
+                    return false;
+                }
+            } else {
+                return false;
+            }
+        } else {
+            return false;
+        }
     }
 
 }
