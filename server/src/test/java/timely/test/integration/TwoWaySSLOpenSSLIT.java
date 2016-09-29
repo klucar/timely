@@ -13,13 +13,13 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import timely.Configuration;
-import timely.Server;
 import timely.api.request.timeseries.QueryRequest;
 import timely.api.response.timeseries.QueryResponse;
 import timely.auth.AuthCache;
 import timely.netty.Constants;
 import timely.test.IntegrationTest;
 import timely.test.TestConfiguration;
+import timely.validator.TimelyServer;
 
 import javax.net.ssl.*;
 import java.io.File;
@@ -70,19 +70,15 @@ public class TwoWaySSLOpenSSLIT extends QueryBase {
         return jdkSslContext.getSocketFactory();
     }
 
-    protected static void setupSSL(Configuration config) throws Exception {
-        config.getSecurity().getSsl().setCertificateFile(serverCert.certificate().getAbsolutePath());
-        config.getSecurity().getSsl().setKeyFile(serverCert.privateKey().getAbsolutePath());
+    @Override
+    public void setupSSL() throws Exception {
+        conf.getSecurity().getSsl().setCertificateFile(serverCert.certificate().getAbsolutePath());
+        conf.getSecurity().getSsl().setKeyFile(serverCert.privateKey().getAbsolutePath());
         // Needed for 2way SSL
-        config.getSecurity().getSsl().setTrustStoreFile(serverCert.certificate().getAbsolutePath());
-        config.getSecurity().getSsl().setUseOpenssl(false);
-        config.getSecurity().getSsl().setUseGeneratedKeypair(false);
-        config.getSecurity().setAllowAnonymousAccess(false);
-    }
-
-    @Before
-    public void configureSSL() throws Exception {
-        setupSSL(conf);
+        conf.getSecurity().getSsl().setTrustStoreFile(serverCert.certificate().getAbsolutePath());
+        conf.getSecurity().getSsl().setUseOpenssl(false);
+        conf.getSecurity().getSsl().setUseGeneratedKeypair(false);
+        conf.getSecurity().setAllowAnonymousAccess(false);
     }
 
     protected HttpsURLConnection getUrlConnection(URL url) throws Exception {
@@ -126,57 +122,50 @@ public class TwoWaySSLOpenSSLIT extends QueryBase {
         return con;
     }
 
+    private TimelyServer server;
+
     @Before
     public void setup() throws Exception {
-        Connector con = mac.getConnector("root", "secret");
-        con.securityOperations().changeUserAuthorizations("root", new Authorizations("A", "B", "C", "D", "E", "F"));
+        //todo cleanup
+        //Connector con = mac.getConnector("root", "secret");
+        connector.securityOperations().changeUserAuthorizations("root", new Authorizations("A", "B", "C", "D", "E", "F"));
+        server = getRunningServer();
     }
 
     @After
     public void tearDown() throws Exception {
         AuthCache.resetSessionMaxAge();
+        server.shutdown();
     }
 
     @Test
     public void testBasicAuthLogin() throws Exception {
-        final Server s = new Server(conf);
-        s.run();
-        try {
-            String metrics = "https://localhost:54322/api/metrics";
-            query(metrics);
-        } finally {
-            s.shutdown();
-        }
+        String metrics = "https://localhost:54322/api/metrics";
+        query(metrics);
     }
 
     @Test
     public void testQueryWithVisibility() throws Exception {
-        final Server s = new Server(conf);
-        s.run();
-        try {
-            put("sys.cpu.user " + TEST_TIME + " 1.0 tag1=value1 tag2=value2", "sys.cpu.user " + (TEST_TIME + 1000)
-                    + " 3.0 tag1=value1 tag2=value2", "sys.cpu.user " + (TEST_TIME + 2000)
-                    + " 2.0 tag1=value1 tag3=value3 viz=A", "sys.cpu.user " + (TEST_TIME + 3000)
-                    + " 2.0 tag1=value1 tag3=value3 viz=D", "sys.cpu.user " + (TEST_TIME + 3000)
-                    + " 2.0 tag1=value1 tag3=value3 viz=G");
-            // Latency in TestConfiguration is 2s, wait for it
-            sleepUninterruptibly(TestConfiguration.WAIT_SECONDS, TimeUnit.SECONDS);
-            QueryRequest request = new QueryRequest();
-            request.setStart(TEST_TIME);
-            request.setEnd(TEST_TIME + 6000);
-            QueryRequest.SubQuery subQuery = new QueryRequest.SubQuery();
-            subQuery.setMetric("sys.cpu.user");
-            subQuery.setDownsample(Optional.of("1s-max"));
-            request.addQuery(subQuery);
-            String metrics = "https://127.0.0.1:54322/api/query";
-            List<QueryResponse> response = query(metrics, request);
-            assertEquals(1, response.size());
-            Map<String, String> tags = response.get(0).getTags();
-            assertEquals(0, tags.size());
-            Map<String, Object> dps = response.get(0).getDps();
-            assertEquals(3, dps.size());
-        } finally {
-            s.shutdown();
-        }
+        put("sys.cpu.user " + TEST_TIME + " 1.0 tag1=value1 tag2=value2", "sys.cpu.user " + (TEST_TIME + 1000)
+                + " 3.0 tag1=value1 tag2=value2", "sys.cpu.user " + (TEST_TIME + 2000)
+                + " 2.0 tag1=value1 tag3=value3 viz=A", "sys.cpu.user " + (TEST_TIME + 3000)
+                + " 2.0 tag1=value1 tag3=value3 viz=D", "sys.cpu.user " + (TEST_TIME + 3000)
+                + " 2.0 tag1=value1 tag3=value3 viz=G");
+        // Latency in TestConfiguration is 2s, wait for it
+        sleepUninterruptibly(TestConfiguration.WAIT_SECONDS, TimeUnit.SECONDS);
+        QueryRequest request = new QueryRequest();
+        request.setStart(TEST_TIME);
+        request.setEnd(TEST_TIME + 6000);
+        QueryRequest.SubQuery subQuery = new QueryRequest.SubQuery();
+        subQuery.setMetric("sys.cpu.user");
+        subQuery.setDownsample(Optional.of("1s-max"));
+        request.addQuery(subQuery);
+        String metrics = "https://127.0.0.1:54322/api/query";
+        List<QueryResponse> response = query(metrics, request);
+        assertEquals(1, response.size());
+        Map<String, String> tags = response.get(0).getTags();
+        assertEquals(0, tags.size());
+        Map<String, Object> dps = response.get(0).getDps();
+        assertEquals(3, dps.size());
     }
 }

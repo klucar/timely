@@ -23,7 +23,6 @@ import com.google.common.collect.Lists;
 @ConfigurationProperties(prefix = "timely")
 public class Configuration {
 
-    private String serverClassName = Server.class.getName();
     private String metricsTable = "timely.metrics";
     private String metaTable = "timely.meta";
     private HashMap<String, Integer> metricAgeOffDays = new HashMap<>();
@@ -50,15 +49,6 @@ public class Configuration {
     @Valid
     @NestedConfigurationProperty
     private Websocket websocket = new Websocket();
-
-    public String getServerClassName() {
-        return serverClassName;
-    }
-
-    public Configuration setServerClassName(String className) {
-        this.serverClassName = className;
-        return this;
-    }
 
     public String getMetricsTable() {
         return metricsTable;
@@ -125,6 +115,7 @@ public class Configuration {
 
     public class Accumulo {
 
+        private boolean standalone = false;
         @NotBlank
         private String zookeepers;
         @NotBlank
@@ -181,6 +172,15 @@ public class Configuration {
 
         public Configuration setPassword(String password) {
             this.password = password;
+            return Configuration.this;
+        }
+
+        public boolean isStandalone() {
+            return standalone;
+        }
+
+        public Configuration setStandalone(boolean standalone) {
+            this.standalone = standalone;
             return Configuration.this;
         }
     }

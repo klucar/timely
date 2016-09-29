@@ -38,6 +38,7 @@ import timely.Configuration;
 import timely.auth.AuthCache;
 import timely.netty.Constants;
 import timely.test.TestConfiguration;
+import timely.validator.TimelyServer;
 
 @SuppressWarnings("deprecation")
 public class TwoWaySSLFailureIT extends QueryBase {
@@ -75,14 +76,15 @@ public class TwoWaySSLFailureIT extends QueryBase {
         return jdkSslContext.getSocketFactory();
     }
 
-    protected static void setupSSL(Configuration config) throws Exception {
-        config.getSecurity().getSsl().setCertificateFile(serverCert.certificate().getAbsolutePath());
-        config.getSecurity().getSsl().setKeyFile(serverCert.privateKey().getAbsolutePath());
+    @Override
+    public void setupSSL() throws Exception {
+        conf.getSecurity().getSsl().setCertificateFile(serverCert.certificate().getAbsolutePath());
+        conf.getSecurity().getSsl().setKeyFile(serverCert.privateKey().getAbsolutePath());
         // Needed for 2way SSL
-        config.getSecurity().getSsl().setTrustStoreFile(serverCert.certificate().getAbsolutePath());
-        config.getSecurity().getSsl().setUseOpenssl(false);
-        config.getSecurity().getSsl().setUseGeneratedKeypair(false);
-        config.getSecurity().setAllowAnonymousAccess(false);
+        conf.getSecurity().getSsl().setTrustStoreFile(serverCert.certificate().getAbsolutePath());
+        conf.getSecurity().getSsl().setUseOpenssl(false);
+        conf.getSecurity().getSsl().setUseGeneratedKeypair(false);
+        conf.getSecurity().setAllowAnonymousAccess(false);
     }
 
     protected HttpsURLConnection getUrlConnection(URL url) throws Exception {
@@ -135,13 +137,14 @@ public class TwoWaySSLFailureIT extends QueryBase {
         conf = TestConfiguration.createMinimalConfigurationForTest();
         conf.getAccumulo().setInstanceName(mac.getInstanceName());
         conf.getAccumulo().setZookeepers(mac.getZooKeepers());
-        setupSSL(conf);
     }
 
     @AfterClass
     public static void afterClass() throws Exception {
         mac.stop();
     }
+
+    private TimelyServer server;
 
     @Before
     public void setup() throws Exception {
@@ -154,23 +157,19 @@ public class TwoWaySSLFailureIT extends QueryBase {
                 }
             }
         });
+        server = getRunningServer();
     }
 
     @After
     public void tearDown() throws Exception {
         AuthCache.resetSessionMaxAge();
+        server.shutdown();
     }
 
     @Test(expected = UnauthorizedUserException.class)
     public void testBasicAuthLoginFailure() throws Exception {
-        final Server s = new Server(conf);
-        s.run();
-        try {
-            String metrics = "https://localhost:54322/api/metrics";
-            query(metrics);
-        } finally {
-            s.shutdown();
-        }
+        String metrics = "https://localhost:54322/api/metrics";
+        query(metrics);
     }
 
 }

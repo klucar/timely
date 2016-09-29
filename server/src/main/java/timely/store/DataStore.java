@@ -16,6 +16,8 @@ import timely.api.response.timeseries.SuggestResponse;
 
 public interface DataStore {
 
+    void initialize();
+
     void store(Metric metric) throws TimelyException;
 
     SuggestResponse suggest(SuggestRequest query) throws TimelyException;

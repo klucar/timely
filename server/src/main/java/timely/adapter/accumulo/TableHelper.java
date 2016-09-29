@@ -6,6 +6,7 @@ import org.apache.accumulo.core.iterators.IteratorUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import timely.Configuration;
+import timely.guice.ConnectorProvider;
 import timely.store.MetricAgeOffFilter;
 
 import java.util.EnumSet;
@@ -23,14 +24,15 @@ public class TableHelper {
 
     @Inject
     Configuration configuration;
-    @Inject
-    Connector connector;
 
-    public TableHelper() {
-    }
+    @Inject
+    ConnectorProvider connectorProvider;
+
+
+    public TableHelper() { }
 
     private boolean tableExists(String table) {
-        final Map<String, String> tableIdMap = connector.tableOperations().tableIdMap();
+        final Map<String, String> tableIdMap = connectorProvider.get().tableOperations().tableIdMap();
         return tableIdMap.containsKey(table);
     }
 
@@ -40,7 +42,7 @@ public class TableHelper {
         if (!tableExists(table)) {
             try {
                 LOG.info("Creating table " + table);
-                connector.tableOperations().create(table);
+                connectorProvider.get().tableOperations().create(table);
                 configureTableAgeoff(table);
             } catch (final TableExistsException ex) {
                 // don't care
@@ -52,10 +54,10 @@ public class TableHelper {
         if (table.contains(".")) {
             final String[] parts = table.split("\\.", 2);
             final String namespace = parts[0];
-            if (!connector.namespaceOperations().exists(namespace)) {
+            if (!connectorProvider.get().namespaceOperations().exists(namespace)) {
                 try {
                     LOG.info("Creating namespace " + namespace);
-                    connector.namespaceOperations().create(namespace);
+                    connectorProvider.get().namespaceOperations().create(namespace);
                 } catch (final NamespaceExistsException ex) {
                     // don't care
                 }
@@ -72,10 +74,10 @@ public class TableHelper {
 
     private void removeAgeOffIterators(String tableName) throws AccumuloSecurityException, AccumuloException,
             TableNotFoundException {
-        Map<String, EnumSet<IteratorUtil.IteratorScope>> iters = connector.tableOperations().listIterators(tableName);
+        Map<String, EnumSet<IteratorUtil.IteratorScope>> iters = connectorProvider.get().tableOperations().listIterators(tableName);
         for (String name : iters.keySet()) {
             if (name.startsWith("ageoff")) {
-                connector.tableOperations().removeIterator(tableName, name, AGEOFF_SCOPES);
+                connectorProvider.get().tableOperations().removeIterator(tableName, name, AGEOFF_SCOPES);
             }
         }
     }
@@ -90,7 +92,7 @@ public class TableHelper {
         }
         IteratorSetting ageOffIteratorSettings = new IteratorSetting(priority, "ageoff", MetricAgeOffFilter.class,
                 ageOffOptions);
-        connector.tableOperations().attachIterator(tableName, ageOffIteratorSettings, AGEOFF_SCOPES);
+        connectorProvider.get().tableOperations().attachIterator(tableName, ageOffIteratorSettings, AGEOFF_SCOPES);
     }
 
 }

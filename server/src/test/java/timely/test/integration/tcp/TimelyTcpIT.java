@@ -52,45 +52,52 @@ public class TimelyTcpIT extends MacITBase {
     private static final Logger LOG = LoggerFactory.getLogger(TimelyTcpIT.class);
     private static final Long TEST_TIME = System.currentTimeMillis();
 
+    private TestServer testServer;
+
+    @Before
+    public void setup() throws Exception {
+        testServer = getRunningTestServer();
+    }
+
     @After
     public void tearDown() throws Exception {
         AuthCache.resetSessionMaxAge();
+        testServer.shutdown();
+    }
+
+    @Override
+    public void setupSSL(){
+
     }
 
     @Test
     public void testVersion() throws Exception {
-        final TestServer m = new TestServer(conf);
-        m.run();
         try (Socket sock = new Socket("127.0.0.1", 54321);
                 PrintWriter writer = new PrintWriter(sock.getOutputStream(), true);) {
             writer.write("version\n");
             writer.flush();
-            while (1 != m.getTcpRequests().getCount()) {
+            while (1 != testServer.getTcpRequests().getCount()) {
                 Thread.sleep(5);
             }
-            Assert.assertEquals(1, m.getTcpRequests().getResponses().size());
-            Assert.assertEquals(VersionRequest.class, m.getTcpRequests().getResponses().get(0).getClass());
-            VersionRequest v = (VersionRequest) m.getTcpRequests().getResponses().get(0);
+            Assert.assertEquals(1, testServer.getTcpRequests().getResponses().size());
+            Assert.assertEquals(VersionRequest.class, testServer.getTcpRequests().getResponses().get(0).getClass());
+            VersionRequest v = (VersionRequest) testServer.getTcpRequests().getResponses().get(0);
             Assert.assertEquals(VersionRequest.VERSION, v.getVersion());
-        } finally {
-            m.shutdown();
         }
     }
 
     @Test
     public void testPut() throws Exception {
-        final TestServer m = new TestServer(conf);
-        m.run();
         try (Socket sock = new Socket("127.0.0.1", 54321);
                 PrintWriter writer = new PrintWriter(sock.getOutputStream(), true);) {
             writer.write("put sys.cpu.user " + TEST_TIME + " 1.0 tag1=value1 tag2=value2\n");
             writer.flush();
-            while (1 != m.getTcpRequests().getCount()) {
+            while (1 != testServer.getTcpRequests().getCount()) {
                 Thread.sleep(5);
             }
-            Assert.assertEquals(1, m.getTcpRequests().getResponses().size());
-            Assert.assertEquals(MetricRequest.class, m.getTcpRequests().getResponses().get(0).getClass());
-            final MetricRequest actual = (MetricRequest) m.getTcpRequests().getResponses().get(0);
+            Assert.assertEquals(1, testServer.getTcpRequests().getResponses().size());
+            Assert.assertEquals(MetricRequest.class, testServer.getTcpRequests().getResponses().get(0).getClass());
+            final MetricRequest actual = (MetricRequest) testServer.getTcpRequests().getResponses().get(0);
             // @formatter:off
             final MetricRequest expected = new MetricRequest(
                     Metric.newBuilder()
@@ -102,28 +109,23 @@ public class TimelyTcpIT extends MacITBase {
             );
             // @formatter on
             Assert.assertEquals(expected, actual);
-        } finally {
-            m.shutdown();
         }
     }
 
     @Test
     public void testPutMultiple() throws Exception {
-
-        final TestServer m = new TestServer(conf);
-        m.run();
         try (Socket sock = new Socket("127.0.0.1", 54321);
                 PrintWriter writer = new PrintWriter(sock.getOutputStream(), true)) {
             // @formatter:off
             writer.write("put sys.cpu.user " + TEST_TIME + " 1.0 tag1=value1 tag2=value2\n"
                        + "put sys.cpu.idle " + (TEST_TIME + 1) + " 1.0 tag3=value3 tag4=value4\n");
             writer.flush();
-            while (2 != m.getTcpRequests().getCount()) {
+            while (2 != testServer.getTcpRequests().getCount()) {
                 Thread.sleep(5);
             }
-            Assert.assertEquals(2, m.getTcpRequests().getResponses().size());
-            Assert.assertEquals(MetricRequest.class, m.getTcpRequests().getResponses().get(0).getClass());
-            MetricRequest actual = (MetricRequest) m.getTcpRequests().getResponses().get(0);
+            Assert.assertEquals(2, testServer.getTcpRequests().getResponses().size());
+            Assert.assertEquals(MetricRequest.class, testServer.getTcpRequests().getResponses().get(0).getClass());
+            MetricRequest actual = (MetricRequest) testServer.getTcpRequests().getResponses().get(0);
             MetricRequest expected = new MetricRequest(
                     Metric.newBuilder()
                             .name("sys.cpu.user")
@@ -134,8 +136,8 @@ public class TimelyTcpIT extends MacITBase {
             );
             Assert.assertEquals(expected, actual);
 
-            Assert.assertEquals(MetricRequest.class, m.getTcpRequests().getResponses().get(1).getClass());
-            actual = (MetricRequest) m.getTcpRequests().getResponses().get(1);
+            Assert.assertEquals(MetricRequest.class, testServer.getTcpRequests().getResponses().get(1).getClass());
+            actual = (MetricRequest) testServer.getTcpRequests().getResponses().get(1);
             expected = new MetricRequest(
                     Metric.newBuilder()
                         .name("sys.cpu.idle")
@@ -147,8 +149,6 @@ public class TimelyTcpIT extends MacITBase {
             // @formatter:on
             Assert.assertEquals(expected, actual);
 
-        } finally {
-            m.shutdown();
         }
     }
 
@@ -193,19 +193,17 @@ public class TimelyTcpIT extends MacITBase {
         binary.get(data, 0, binary.remaining());
         LOG.debug("Sending {} bytes", data.length);
 
-        final TestServer m = new TestServer(conf);
-        m.run();
         try (Socket sock = new Socket("127.0.0.1", 54321);) {
             sock.getOutputStream().write(data);
             sock.getOutputStream().flush();
-            while (2 != m.getTcpRequests().getCount()) {
+            while (2 != testServer.getTcpRequests().getCount()) {
                 LOG.debug("Thread sleeping");
                 Thread.sleep(5);
             }
-            Assert.assertEquals(2, m.getTcpRequests().getResponses().size());
-            Assert.assertEquals(MetricRequest.class, m.getTcpRequests().getResponses().get(0).getClass());
+            Assert.assertEquals(2, testServer.getTcpRequests().getResponses().size());
+            Assert.assertEquals(MetricRequest.class, testServer.getTcpRequests().getResponses().get(0).getClass());
             // @formatter:off
-            MetricRequest actual = (MetricRequest) m.getTcpRequests().getResponses().get(0);
+            MetricRequest actual = (MetricRequest) testServer.getTcpRequests().getResponses().get(0);
             MetricRequest expected = new MetricRequest(
                     Metric.newBuilder()
                             .name("sys.cpu.user")
@@ -216,8 +214,8 @@ public class TimelyTcpIT extends MacITBase {
             );
             Assert.assertEquals(expected, actual);
 
-            Assert.assertEquals(MetricRequest.class, m.getTcpRequests().getResponses().get(1).getClass());
-            actual = (MetricRequest) m.getTcpRequests().getResponses().get(1);
+            Assert.assertEquals(MetricRequest.class, testServer.getTcpRequests().getResponses().get(1).getClass());
+            actual = (MetricRequest) testServer.getTcpRequests().getResponses().get(1);
             expected = new MetricRequest(
                     Metric.newBuilder()
                             .name("sys.cpu.idle")
@@ -229,41 +227,32 @@ public class TimelyTcpIT extends MacITBase {
             // @formatter:on
             Assert.assertEquals(expected, actual);
 
-        } finally {
-            m.shutdown();
         }
     }
 
     @Test
     public void testPutInvalidTimestamp() throws Exception {
-        final TestServer m = new TestServer(conf);
-        m.run();
         try (Socket sock = new Socket("127.0.0.1", 54321);
                 PrintWriter writer = new PrintWriter(sock.getOutputStream(), true);
                 BufferedReader reader = new BufferedReader(new InputStreamReader(sock.getInputStream()));) {
             writer.write("put sys.cpu.user " + TEST_TIME + "Z" + " 1.0 tag1=value1 tag2=value2\n");
             writer.flush();
             sleepUninterruptibly(WAIT_SECONDS, TimeUnit.SECONDS);
-            Assert.assertEquals(0, m.getTcpRequests().getCount());
-        } finally {
-            m.shutdown();
+            Assert.assertEquals(0, testServer.getTcpRequests().getCount());
         }
     }
 
     @Test
     public void testPersistence() throws Exception {
-        final Server s = new Server(conf);
-        s.run();
-        try {
-            put("sys.cpu.user " + TEST_TIME + " 1.0 tag1=value1 tag2=value2", "sys.cpu.idle " + (TEST_TIME + 1)
-                    + " 1.0 tag3=value3 tag4=value4", "sys.cpu.idle " + (TEST_TIME + 2)
-                    + " 1.0 tag3=value3 tag4=value4");
-            sleepUninterruptibly(WAIT_SECONDS, TimeUnit.SECONDS);
-        } finally {
-            s.shutdown();
-        }
-        final ZooKeeperInstance inst = new ZooKeeperInstance(mac.getClientConfig());
-        final Connector connector = inst.getConnector("root", new PasswordToken("secret".getBytes(UTF_8)));
+        put("sys.cpu.user " + TEST_TIME + " 1.0 tag1=value1 tag2=value2", "sys.cpu.idle " + (TEST_TIME + 1)
+                + " 1.0 tag3=value3 tag4=value4", "sys.cpu.idle " + (TEST_TIME + 2) + " 1.0 tag3=value3 tag4=value4");
+        sleepUninterruptibly(WAIT_SECONDS, TimeUnit.SECONDS);
+        testServer.shutdown();
+
+        //todo cleanup
+        //final ZooKeeperInstance inst = new ZooKeeperInstance(mac.getClientConfig());
+        //final Connector connector = inst.getConnector("root", new PasswordToken("secret".getBytes(UTF_8)));
+
         assertTrue(connector.namespaceOperations().exists("timely"));
         assertTrue(connector.tableOperations().exists("timely.metrics"));
         assertTrue(connector.tableOperations().exists("timely.meta"));
@@ -296,18 +285,15 @@ public class TimelyTcpIT extends MacITBase {
 
     @Test
     public void testPersistenceWithVisibility() throws Exception {
-        final Server s = new Server(conf);
-        s.run();
-        try {
-            put("sys.cpu.user " + TEST_TIME + " 1.0 tag1=value1 tag2=value2", "sys.cpu.idle " + (TEST_TIME + 1)
-                    + " 1.0 tag3=value3 tag4=value4 viz=(a|b)", "sys.cpu.idle " + (TEST_TIME + 2)
-                    + " 1.0 tag3=value3 tag4=value4 viz=(c&b)");
-            sleepUninterruptibly(WAIT_SECONDS, TimeUnit.SECONDS);
-        } finally {
-            s.shutdown();
-        }
-        final ZooKeeperInstance inst = new ZooKeeperInstance(mac.getClientConfig());
-        final Connector connector = inst.getConnector("root", new PasswordToken("secret".getBytes(UTF_8)));
+        put("sys.cpu.user " + TEST_TIME + " 1.0 tag1=value1 tag2=value2", "sys.cpu.idle " + (TEST_TIME + 1)
+                + " 1.0 tag3=value3 tag4=value4 viz=(a|b)", "sys.cpu.idle " + (TEST_TIME + 2)
+                + " 1.0 tag3=value3 tag4=value4 viz=(c&b)");
+        sleepUninterruptibly(WAIT_SECONDS, TimeUnit.SECONDS);
+        testServer.shutdown();
+
+        // todo cleanup
+        //final ZooKeeperInstance inst = new ZooKeeperInstance(mac.getClientConfig());
+        //final Connector connector = inst.getConnector("root", new PasswordToken("secret".getBytes(UTF_8)));
         connector.securityOperations().changeUserAuthorizations("root", new Authorizations("a", "b", "c"));
 
         int count = 0;

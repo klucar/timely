@@ -128,6 +128,7 @@ public abstract class QueryBase extends MacITBase {
             throws Exception {
         URL url = new URL(location);
         HttpsURLConnection con = getUrlConnection(url);
+        LOG.debug("Configuring HTTPS connection: {}", url);
         con.setRequestMethod("POST");
         con.setDoOutput(true);
         con.setRequestProperty("Content-Type", "application/json");

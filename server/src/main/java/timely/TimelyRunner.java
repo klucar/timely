@@ -8,12 +8,15 @@ import org.slf4j.LoggerFactory;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.context.ConfigurableApplicationContext;
 import timely.guice.TimelyModule;
+import timely.guice.TimelyServerProvider;
 import timely.validator.TimelyServer;
 
 import java.util.concurrent.CountDownLatch;
 
 /**
+ *
  * Generic Runner for TimelyServer implementations
+ *
  */
 public class TimelyRunner {
 
@@ -22,19 +25,24 @@ public class TimelyRunner {
     private static ConfigurableApplicationContext applicationContext;
 
     @Inject
+    private TimelyServerProvider serverProvider;
+
     private TimelyServer server;
 
     public static void main(String[] args) throws Exception {
 
+        // Process args with spring boot
         Configuration conf = initializeConfiguration(args);
 
         Injector injector = Guice.createInjector(new TimelyModule(conf));
 
         TimelyRunner runner = new TimelyRunner();
+        injector.injectMembers(runner);
         runner.runServer();
     }
 
     private void runServer() {
+        server = serverProvider.get();
         server.setup();
         try {
             server.run();

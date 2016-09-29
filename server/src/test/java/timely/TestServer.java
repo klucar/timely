@@ -1,5 +1,6 @@
 package timely;
 
+import com.google.inject.Inject;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.socket.DatagramChannel;
@@ -23,12 +24,14 @@ public class TestServer extends Server {
     private final TestCaptureRequestHandler httpRequests = new TestCaptureRequestHandler();
     private final TestCaptureRequestHandler udpRequests = new TestCaptureRequestHandler();
 
-    public TestServer(Configuration conf) throws Exception {
-        super(conf);
+    @Inject
+    Configuration config;
+
+    public TestServer() {
     }
 
     @Override
-    protected ChannelHandler setupHttpChannel(Configuration config, SslContext sslCtx) {
+    protected ChannelHandler setupHttpChannel(SslContext sslCtx) {
         return new ChannelInitializer<SocketChannel>() {
 
             @Override

@@ -34,19 +34,15 @@ public class OneWaySSLBase extends QueryBase {
         return jdkSslContext.getSocketFactory();
     }
 
-    protected static void setupSSL(Configuration config) throws Exception {
+    @Override
+    public void setupSSL() throws Exception {
         SelfSignedCertificate serverCert = new SelfSignedCertificate();
-        config.getSecurity().getSsl().setCertificateFile(serverCert.certificate().getAbsolutePath());
+        conf.getSecurity().getSsl().setCertificateFile(serverCert.certificate().getAbsolutePath());
         clientTrustStoreFile = serverCert.certificate().getAbsoluteFile();
-        config.getSecurity().getSsl().setKeyFile(serverCert.privateKey().getAbsolutePath());
-        config.getSecurity().getSsl().setUseOpenssl(false);
-        config.getSecurity().getSsl().setUseGeneratedKeypair(false);
-        config.getSecurity().setAllowAnonymousAccess(true);
-    }
-
-    @Before
-    public void configureSSL() throws Exception {
-        setupSSL(conf);
+        conf.getSecurity().getSsl().setKeyFile(serverCert.privateKey().getAbsolutePath());
+        conf.getSecurity().getSsl().setUseOpenssl(false);
+        conf.getSecurity().getSsl().setUseGeneratedKeypair(false);
+        conf.getSecurity().setAllowAnonymousAccess(true);
     }
 
     @Override

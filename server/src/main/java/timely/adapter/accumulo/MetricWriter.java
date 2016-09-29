@@ -6,6 +6,7 @@ import org.apache.accumulo.core.data.Mutation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import timely.Configuration;
+import timely.guice.ConnectorProvider;
 import timely.model.Metric;
 
 import java.util.ArrayList;
@@ -28,20 +29,23 @@ public class MetricWriter {
     private Configuration configuration;
 
     @Inject
-    private Connector connector;
+    private ConnectorProvider connectorProvider;
 
-    private final BatchWriterConfig bwConfig;
+    private final BatchWriterConfig bwConfig = new BatchWriterConfig();
     private final List<BatchWriter> writers = new ArrayList<>();
     private final ThreadLocal<BatchWriter> metaWriter = new ThreadLocal<>();
     private final ThreadLocal<BatchWriter> metricsWriter = new ThreadLocal<>();
 
-    private final String metaTable;
-    private final String metricsTable;
+    private String metaTable;
+    private String metricsTable;
 
     public MetricWriter() {
+
+    }
+
+    public void initialize() {
         Configuration.Accumulo accumuloConf = configuration.getAccumulo();
 
-        bwConfig = new BatchWriterConfig();
         int numWriteThreads = configuration.getAccumulo().getWrite().getThreads();
         bwConfig.setMaxLatency(getTimeInMillis(accumuloConf.getWrite().getLatency()), TimeUnit.MILLISECONDS);
         bwConfig.setMaxMemory(getMemoryInBytes(accumuloConf.getWrite().getBufferSize()) / numWriteThreads);
@@ -66,12 +70,12 @@ public class MetricWriter {
                 } catch (MutationsRejectedException e1) {
                     LOG.error("Error closing metric writer", e1);
                 }
-                final BatchWriter w = connector.createBatchWriter(metricsTable, bwConfig);
+                final BatchWriter w = connectorProvider.get().createBatchWriter(metricsTable, bwConfig);
                 metricsWriter.set(w);
                 writers.add(w);
             } catch (TableNotFoundException e1) {
                 LOG.error("Unexpected error recreating meta batch writer, shutting down Timely server: {}", e1);
-                System.exit(1);
+                throw new RuntimeException(e1);
             }
         }
         return false;
@@ -92,12 +96,12 @@ public class MetricWriter {
                 } catch (MutationsRejectedException e1) {
                     LOG.error("Error closing meta writer", e1);
                 }
-                final BatchWriter w = connector.createBatchWriter(metaTable, bwConfig);
+                final BatchWriter w = connectorProvider.get().createBatchWriter(metaTable, bwConfig);
                 metaWriter.set(w);
                 writers.add(w);
             } catch (TableNotFoundException e1) {
                 LOG.error("Unexpected error recreating meta batch writer, shutting down Timely server: {}", e1);
-                System.exit(1);
+                throw new RuntimeException(e1);
             }
         }
         return false;
@@ -106,7 +110,7 @@ public class MetricWriter {
     private BatchWriter getMetaWriter() {
         if (null == metaWriter.get()) {
             try {
-                BatchWriter w = connector.createBatchWriter(metaTable, bwConfig);
+                BatchWriter w = connectorProvider.get().createBatchWriter(metaTable, bwConfig);
                 metaWriter.set(w);
                 writers.add(w);
             } catch (TableNotFoundException e) {
@@ -120,7 +124,7 @@ public class MetricWriter {
     private BatchWriter getMetricsWriter() {
         if (null == metricsWriter.get()) {
             try {
-                BatchWriter w = connector.createBatchWriter(metricsTable, bwConfig);
+                BatchWriter w = connectorProvider.get().createBatchWriter(metricsTable, bwConfig);
                 metricsWriter.set(w);
                 writers.add(w);
             } catch (TableNotFoundException e) {

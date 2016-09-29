@@ -29,6 +29,7 @@ import timely.api.response.timeseries.SearchLookupResponse;
 import timely.api.response.timeseries.SearchLookupResponse.Result;
 import timely.api.response.timeseries.SuggestResponse;
 import timely.auth.AuthCache;
+import timely.guice.ConnectorProvider;
 import timely.model.Metric;
 import timely.model.Tag;
 import timely.sample.Aggregator;
@@ -63,33 +64,39 @@ public class DataStoreImpl implements DataStore {
     MetricWriter metricWriter;
 
     @Inject
-    Configuration configuration; // todo remove?
+    ConnectorProvider connectorProvider;
+    Connector connector; // todo remove?
 
     @Inject
-    Connector connector; // todo remove?
+    Configuration config;
 
     private MetaCache metaCache = null;
     private final AtomicLong lastCountTime = new AtomicLong(System.currentTimeMillis());
     private final AtomicReference<SortedMap<MetricTagK, Integer>> metaCounts = new AtomicReference<>(new TreeMap<>());
     private final InternalMetrics internalMetrics = new InternalMetrics();
     private final Timer internalMetricsTimer = new Timer(true);
-    private final int scannerThreads;
+    private int scannerThreads;
     private boolean anonAccessAllowed = false;
 
-    private final String metaTable;
-    private final String metricsTable;
+    private String metaTable;
+    private String metricsTable;
 
-    public DataStoreImpl(Configuration conf) throws TimelyException {
+    public DataStoreImpl() {
+    }
 
+    @Override
+    public void initialize() {
+        connector = connectorProvider.get();
+        metricWriter.initialize();
         try {
-            metaTable = configuration.getMetaTable();
-            metricsTable = configuration.getMetricsTable();
+            metaTable = config.getMetaTable();
+            metricsTable = config.getMetricsTable();
 
-            scannerThreads = configuration.getAccumulo().getScan().getThreads();
+            scannerThreads = config.getAccumulo().getScan().getThreads();
 
-            anonAccessAllowed = conf.getSecurity().isAllowAnonymousAccess();
+            anonAccessAllowed = config.getSecurity().isAllowAnonymousAccess();
 
-            for (String table : new String[] { conf.getMetricsTable(), conf.getMetaTable() }) {
+            for (String table : new String[] { config.getMetricsTable(), config.getMetaTable() }) {
                 tableHelper.createNamespaceFromTableName(table);
                 tableHelper.createTableIfNotExists(table);
             }
@@ -102,11 +109,23 @@ public class DataStoreImpl implements DataStore {
                 }
 
             }, METRICS_PERIOD, METRICS_PERIOD);
-            this.metaCache = MetaCacheFactory.getCache(conf);
-        } catch (Exception e) {
-            throw new TimelyException(HttpResponseStatus.INTERNAL_SERVER_ERROR.code(), "Error creating DataStoreImpl",
-                    e.getMessage(), e);
+
+            this.metaCache = MetaCacheFactory.getCache(config);
+
+        } catch (AccumuloSecurityException e) {
+            e.printStackTrace();
+            throw new RuntimeException(e);
+        } catch (TableNotFoundException e) {
+            e.printStackTrace();
+            throw new RuntimeException(e);
+        } catch (AccumuloException e) {
+            e.printStackTrace();
+            throw new RuntimeException(e);
         }
+        // catch (Exception e) {
+        // LOG.error("Unable to create DataStoreImpl: {}", e.getMessage());
+        // throw new RuntimeException(e);
+        // }
     }
 
     @Override

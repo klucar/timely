@@ -23,7 +23,8 @@ public class TestConfiguration {
                 .getWebsocket().setIp("127.0.0.1")
                 .getWebsocket().setPort(54323)
                 .getWebsocket().setTimeout(20)
-                .getAccumulo().setZookeepers("localhost:2181")
+                .getAccumulo().setStandalone(true)
+                .getAccumulo().setZookeepers("localhost:9804")  // todo have mac config parse the port from here
                 .getAccumulo().setInstanceName("test")
                 .getAccumulo().setUsername("root")
                 .getAccumulo().setPassword("secret")

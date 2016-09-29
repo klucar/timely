@@ -1,35 +1,34 @@
 package timely.test.integration.http;
 
-import static org.junit.Assert.assertEquals;
 import io.netty.handler.codec.http.HttpHeaders.Names;
-
-import java.net.HttpURLConnection;
-import java.net.URL;
-
-import javax.net.ssl.HttpsURLConnection;
-
-import org.junit.*;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
 import org.junit.experimental.categories.Category;
-
-import timely.Server;
 import timely.netty.http.StrictTransportHandler;
 import timely.test.IntegrationTest;
 import timely.test.integration.OneWaySSLBase;
+import timely.validator.TimelyServer;
+
+import javax.net.ssl.HttpsURLConnection;
+import java.net.HttpURLConnection;
+import java.net.URL;
+
+import static org.junit.Assert.assertEquals;
 
 @Category(IntegrationTest.class)
 public class HTTPStrictTransportSecurityIT extends OneWaySSLBase {
 
-    private static Server s = null;
+    private TimelyServer server;
 
     @Before
     public void before() throws Exception {
-        s = new Server(conf);
-        s.run();
+        server = getRunningServer();
     }
 
     @After
     public void after() throws Exception {
-        s.shutdown();
+        server.shutdown();
     }
 
     @Test

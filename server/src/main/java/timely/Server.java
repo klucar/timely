@@ -52,11 +52,11 @@ import timely.netty.websocket.subscription.WSCreateSubscriptionRequestHandler;
 import timely.netty.websocket.subscription.WSRemoveSubscriptionRequestHandler;
 import timely.netty.websocket.timeseries.*;
 import timely.store.DataStore;
-import timely.store.DataStoreFactory;
 import timely.store.MetaCacheFactory;
 import timely.validator.TimelyServer;
 
 import java.io.File;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -76,7 +76,10 @@ public class Server implements TimelyServer {
     private static final String WS_PATH = "/websocket";
 
     @Inject
-    private Configuration config;
+    protected Configuration config;
+
+    @Inject
+    protected DataStore dataStore;
 
     private EventLoopGroup tcpWorkerGroup = null;
     private EventLoopGroup tcpBossGroup = null;
@@ -92,8 +95,6 @@ public class Server implements TimelyServer {
     private Channel udpChannelHandle = null;
     private Class<? extends ServerSocketChannel> channelClass = null;
     private Class<? extends Channel> datagramChannelClass = null;
-
-    private DataStore dataStore = null;
 
     public Server() {
     }
@@ -168,11 +169,13 @@ public class Server implements TimelyServer {
             LOG.error("Error flushing to server during shutdown", e);
         }
 
+        LOG.info("Closing WebSocketRequestDecoder");
+        WebSocketRequestDecoder.close();
+
         LOG.info("Closing MetaCacheFactory");
         MetaCacheFactory.close();
 
-        LOG.info("Closing WebSocketRequestDecoder");
-        WebSocketRequestDecoder.close();
+        AuthCache.resetSessionMaxAge();
 
         LOG.info("Server shut down.");
     }
@@ -181,10 +184,13 @@ public class Server implements TimelyServer {
     public void setup() {
         // Initialize the MetaCache
         MetaCacheFactory.getCache(config);
+
         // initialize the auth cache
         AuthCache.setSessionMaxAge(config);
+
         // Initialize the VisibilityCache
         VisibilityCache.init(config);
+
         final boolean useEpoll = useEpoll();
         if (useEpoll) {
             tcpWorkerGroup = new EpollEventLoopGroup();
@@ -214,10 +220,11 @@ public class Server implements TimelyServer {
 
     @Override
     public void run() throws Exception {
+        dataStore.initialize();
+
         int nettyThreads = Math.max(1,
                 SystemPropertyUtil.getInt("io.netty.eventLoopThreads", Runtime.getRuntime().availableProcessors() * 2));
         config.getAccumulo().getWrite().setThreads(nettyThreads);
-        dataStore = DataStoreFactory.create(config);
 
         final ServerBootstrap tcpServer = new ServerBootstrap();
         tcpServer.group(tcpBossGroup, tcpWorkerGroup);
@@ -234,7 +241,7 @@ public class Server implements TimelyServer {
 
         final int httpPort = config.getHttp().getPort();
         final String httpIp = config.getHttp().getIp();
-        SslContext sslCtx = createSSLContext(config);
+        SslContext sslCtx = createSSLContext();
         if (sslCtx instanceof OpenSslServerContext) {
             OpenSslServerContext openssl = (OpenSslServerContext) sslCtx;
             String application = "Timely_" + httpPort;
@@ -248,7 +255,7 @@ public class Server implements TimelyServer {
         httpServer.group(httpBossGroup, httpWorkerGroup);
         httpServer.channel(channelClass);
         httpServer.handler(new LoggingHandler());
-        httpServer.childHandler(setupHttpChannel(config, sslCtx));
+        httpServer.childHandler(setupHttpChannel(sslCtx));
         httpServer.option(ChannelOption.ALLOCATOR, PooledByteBufAllocator.DEFAULT);
         httpServer.option(ChannelOption.SO_BACKLOG, 128);
         httpServer.option(ChannelOption.SO_KEEPALIVE, true);
@@ -261,7 +268,7 @@ public class Server implements TimelyServer {
         wsServer.group(wsBossGroup, wsWorkerGroup);
         wsServer.channel(channelClass);
         wsServer.handler(new LoggingHandler());
-        wsServer.childHandler(setupWSChannel(sslCtx, config));
+        wsServer.childHandler(setupWSChannel(sslCtx));
         wsServer.option(ChannelOption.ALLOCATOR, PooledByteBufAllocator.DEFAULT);
         wsServer.option(ChannelOption.SO_BACKLOG, 128);
         wsServer.option(ChannelOption.SO_KEEPALIVE, true);
@@ -283,7 +290,7 @@ public class Server implements TimelyServer {
                 tcpAddress, tcpPort, httpAddress, httpPort, wsAddress, wsPort, udpAddress, udpPort);
     }
 
-    protected SslContext createSSLContext(Configuration config) throws Exception {
+    protected SslContext createSSLContext() throws Exception {
 
         Configuration.Ssl sslCfg = config.getSecurity().getSsl();
         Boolean generate = sslCfg.isUseGeneratedKeypair();
@@ -292,7 +299,9 @@ public class Server implements TimelyServer {
             LOG.warn("Using generated self signed server certificate");
             Date begin = new Date();
             Date end = new Date(begin.getTime() + 86400000);
-            SelfSignedCertificate ssc = new SelfSignedCertificate("localhost", begin, end);
+            InetAddress localhost = InetAddress.getLocalHost();
+            LOG.warn("Self signed Cert hostname: {}", localhost);
+            SelfSignedCertificate ssc = new SelfSignedCertificate(localhost.getCanonicalHostName(), begin, end);
             ssl = SslContextBuilder.forServer(ssc.certificate(), ssc.privateKey());
         } else {
             String cert = sslCfg.getCertificateFile();
@@ -324,7 +333,7 @@ public class Server implements TimelyServer {
         return ssl.build();
     }
 
-    protected ChannelHandler setupHttpChannel(Configuration config, SslContext sslCtx) {
+    protected ChannelHandler setupHttpChannel(SslContext sslCtx) {
 
         return new ChannelInitializer<SocketChannel>() {
 
@@ -403,7 +412,7 @@ public class Server implements TimelyServer {
         };
     }
 
-    protected ChannelHandler setupWSChannel(SslContext sslCtx, Configuration conf) {
+    protected ChannelHandler setupWSChannel(SslContext sslCtx) {
         return new ChannelInitializer<SocketChannel>() {
 
             @Override
@@ -412,7 +421,7 @@ public class Server implements TimelyServer {
                 ch.pipeline().addLast("httpServer", new HttpServerCodec());
                 ch.pipeline().addLast("aggregator", new HttpObjectAggregator(8192));
                 ch.pipeline().addLast("sessionExtractor", new WebSocketHttpCookieHandler(config));
-                ch.pipeline().addLast("idle-handler", new IdleStateHandler(conf.getWebsocket().getTimeout(), 0, 0));
+                ch.pipeline().addLast("idle-handler", new IdleStateHandler(config.getWebsocket().getTimeout(), 0, 0));
                 ch.pipeline().addLast("ws-protocol", new WebSocketServerProtocolHandler(WS_PATH, null, true));
                 ch.pipeline().addLast("wsDecoder", new WebSocketRequestDecoder(config));
                 ch.pipeline().addLast("aggregators", new WSAggregatorsRequestHandler());
