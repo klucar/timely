@@ -69,7 +69,6 @@ public class TwoWaySSLIT extends QueryBase {
         return jdkSslContext.getSocketFactory();
     }
 
-    @Override
     public void setupSSL() throws Exception {
         conf.getSecurity().getSsl().setCertificateFile(serverCert.certificate().getAbsolutePath());
         conf.getSecurity().getSsl().setKeyFile(serverCert.privateKey().getAbsolutePath());
@@ -109,17 +108,10 @@ public class TwoWaySSLIT extends QueryBase {
         return con;
     }
 
-    private TimelyServer server;
-
     @Before
     public void setup() throws Exception {
         setupSSL();
-        server = getRunningServer();
-    }
-
-    @After
-    public void tearDown() throws Exception {
-        server.shutdown();
+        startTimelyServer();
     }
 
     @Test

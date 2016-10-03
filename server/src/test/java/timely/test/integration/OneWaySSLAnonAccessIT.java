@@ -29,16 +29,9 @@ public class OneWaySSLAnonAccessIT extends OneWaySSLBase {
 
     private static final Long TEST_TIME = System.currentTimeMillis();
 
-    private TimelyServer server;
-
     @Before
     public void startupServer() throws Exception {
-        server = getRunningServer();
-    }
-
-    @After
-    public void shutdownServer() throws Exception {
-        server.shutdown();
+        startTimelyServer();
     }
 
     @Test

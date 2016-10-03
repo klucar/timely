@@ -34,7 +34,7 @@ public class OneWaySSLBase extends QueryBase {
         return jdkSslContext.getSocketFactory();
     }
 
-    @Override
+    @Before
     public void setupSSL() throws Exception {
         SelfSignedCertificate serverCert = new SelfSignedCertificate();
         conf.getSecurity().getSsl().setCertificateFile(serverCert.certificate().getAbsolutePath());
@@ -59,7 +59,7 @@ public class OneWaySSLBase extends QueryBase {
     }
 
     @After
-    public void tearDown() throws Exception {
+    public void tearDownAuthCache() throws Exception {
         AuthCache.resetSessionMaxAge();
     }
 

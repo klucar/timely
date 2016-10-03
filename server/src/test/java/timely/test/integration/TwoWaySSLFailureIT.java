@@ -3,51 +3,25 @@ package timely.test.integration;
 import io.netty.handler.codec.http.HttpHeaders.Names;
 import io.netty.handler.codec.http.cookie.ClientCookieDecoder;
 import io.netty.handler.codec.http.cookie.Cookie;
-import io.netty.handler.ssl.ApplicationProtocolConfig;
-import io.netty.handler.ssl.JdkSslClientContext;
-import io.netty.handler.ssl.JdkSslContext;
-import io.netty.handler.ssl.SslContext;
-import io.netty.handler.ssl.SslContextBuilder;
-import io.netty.handler.ssl.SslProvider;
+import io.netty.handler.ssl.*;
 import io.netty.handler.ssl.util.SelfSignedCertificate;
-
-import java.io.File;
-import java.net.URL;
-import java.util.List;
-
-import javax.net.ssl.HostnameVerifier;
-import javax.net.ssl.HttpsURLConnection;
-import javax.net.ssl.SSLContext;
-import javax.net.ssl.SSLSession;
-import javax.net.ssl.SSLSocketFactory;
-
-import org.apache.accumulo.core.client.Connector;
-import org.apache.accumulo.minicluster.MiniAccumuloCluster;
-import org.apache.accumulo.minicluster.MiniAccumuloConfig;
-import org.junit.After;
-import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.Before;
-import org.junit.BeforeClass;
 import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
-
-import timely.Server;
-import timely.Configuration;
-import timely.auth.AuthCache;
 import timely.netty.Constants;
-import timely.test.TestConfiguration;
-import timely.validator.TimelyServer;
+
+import javax.net.ssl.*;
+import java.io.File;
+import java.net.URL;
+import java.util.List;
 
 @SuppressWarnings("deprecation")
 public class TwoWaySSLFailureIT extends QueryBase {
 
     @ClassRule
     public static final TemporaryFolder temp = new TemporaryFolder();
-
-    private static MiniAccumuloCluster mac = null;
-    private static Configuration conf = null;
 
     private static SelfSignedCertificate serverCert = null;
     private static File clientTrustStoreFile = null;
@@ -74,17 +48,6 @@ public class TwoWaySSLFailureIT extends QueryBase {
         JdkSslContext jdk = (JdkSslContext) ctx;
         SSLContext jdkSslContext = jdk.context();
         return jdkSslContext.getSocketFactory();
-    }
-
-    @Override
-    public void setupSSL() throws Exception {
-        conf.getSecurity().getSsl().setCertificateFile(serverCert.certificate().getAbsolutePath());
-        conf.getSecurity().getSsl().setKeyFile(serverCert.privateKey().getAbsolutePath());
-        // Needed for 2way SSL
-        conf.getSecurity().getSsl().setTrustStoreFile(serverCert.certificate().getAbsolutePath());
-        conf.getSecurity().getSsl().setUseOpenssl(false);
-        conf.getSecurity().getSsl().setUseGeneratedKeypair(false);
-        conf.getSecurity().setAllowAnonymousAccess(false);
     }
 
     protected HttpsURLConnection getUrlConnection(URL url) throws Exception {
@@ -118,52 +81,20 @@ public class TwoWaySSLFailureIT extends QueryBase {
         Assert.assertEquals(Constants.COOKIE_NAME, sessionCookie.name());
         con = (HttpsURLConnection) url.openConnection();
         con.setRequestProperty(Names.COOKIE, sessionCookie.name() + "=" + sessionCookie.value());
-        con.setHostnameVerifier(new HostnameVerifier() {
-
-            @Override
-            public boolean verify(String arg0, SSLSession arg1) {
-                return true;
-            }
-        });
+        con.setHostnameVerifier((arg0, arg1) -> true);
         return con;
     }
 
-    @BeforeClass
-    public static void beforeClass() throws Exception {
-        temp.create();
-        final MiniAccumuloConfig macConfig = new MiniAccumuloConfig(temp.newFolder("mac"), "secret");
-        mac = new MiniAccumuloCluster(macConfig);
-        mac.start();
-        conf = TestConfiguration.createMinimalConfigurationForTest();
-        conf.getAccumulo().setInstanceName(mac.getInstanceName());
-        conf.getAccumulo().setZookeepers(mac.getZooKeepers());
-    }
-
-    @AfterClass
-    public static void afterClass() throws Exception {
-        mac.stop();
-    }
-
-    private TimelyServer server;
-
     @Before
-    public void setup() throws Exception {
-        Connector con = mac.getConnector("root", "secret");
-        con.tableOperations().list().forEach(t -> {
-            if (t.startsWith("timely")) {
-                try {
-                    con.tableOperations().delete(t);
-                } catch (Exception e) {
-                }
-            }
-        });
-        server = getRunningServer();
-    }
-
-    @After
-    public void tearDown() throws Exception {
-        AuthCache.resetSessionMaxAge();
-        server.shutdown();
+    public void setupSsl() throws Exception {
+        conf.getSecurity().getSsl().setCertificateFile(serverCert.certificate().getAbsolutePath());
+        conf.getSecurity().getSsl().setKeyFile(serverCert.privateKey().getAbsolutePath());
+        // Needed for 2way SSL
+        conf.getSecurity().getSsl().setTrustStoreFile(serverCert.certificate().getAbsolutePath());
+        conf.getSecurity().getSsl().setUseOpenssl(false);
+        conf.getSecurity().getSsl().setUseGeneratedKeypair(false);
+        conf.getSecurity().setAllowAnonymousAccess(false);
+        startTimelyServer();
     }
 
     @Test(expected = UnauthorizedUserException.class)

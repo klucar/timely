@@ -9,16 +9,9 @@ import timely.validator.TimelyServer;
 @Category(IntegrationTest.class)
 public class StaticFileServerIT extends OneWaySSLBase {
 
-    private TimelyServer server;
-
     @Before
     public void before() throws Exception {
-        server = getRunningServer();
-    }
-
-    @After
-    public void after() throws Exception {
-        server.shutdown();
+        startTimelyServer();
     }
 
     @Test(expected = NotSuccessfulException.class)

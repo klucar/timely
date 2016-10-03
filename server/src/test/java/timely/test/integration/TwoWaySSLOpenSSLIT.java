@@ -70,7 +70,6 @@ public class TwoWaySSLOpenSSLIT extends QueryBase {
         return jdkSslContext.getSocketFactory();
     }
 
-    @Override
     public void setupSSL() throws Exception {
         conf.getSecurity().getSsl().setCertificateFile(serverCert.certificate().getAbsolutePath());
         conf.getSecurity().getSsl().setKeyFile(serverCert.privateKey().getAbsolutePath());
@@ -122,20 +121,12 @@ public class TwoWaySSLOpenSSLIT extends QueryBase {
         return con;
     }
 
-    private TimelyServer server;
-
     @Before
     public void setup() throws Exception {
-        //todo cleanup
-        //Connector con = mac.getConnector("root", "secret");
-        connector.securityOperations().changeUserAuthorizations("root", new Authorizations("A", "B", "C", "D", "E", "F"));
-        server = getRunningServer();
-    }
-
-    @After
-    public void tearDown() throws Exception {
-        AuthCache.resetSessionMaxAge();
-        server.shutdown();
+        setupSSL();
+        startTimelyServer();
+        connectorProvider.get().securityOperations()
+                .changeUserAuthorizations("root", new Authorizations("A", "B", "C", "D", "E", "F"));
     }
 
     @Test

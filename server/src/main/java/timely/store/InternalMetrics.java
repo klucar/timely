@@ -30,11 +30,10 @@ public class InternalMetrics {
 
     public InternalMetrics() {
         super();
-        try {
-            hostName = InetAddress.getLocalHost().getHostName();
-        } catch (UnknownHostException e) {
-            LOG.error("Error getting hostname", e);
-        }
+        /*
+         * try { //hostName = InetAddress.getLocalHost().getHostName(); } catch
+         * (UnknownHostException e) { LOG.error("Error getting hostname", e); }
+         */
         tags.add(new Tag(HOSTNAME_TAG, hostName));
     }
 

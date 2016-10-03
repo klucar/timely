@@ -1,6 +1,7 @@
 package timely.test.integration.udp;
 
 import com.google.flatbuffers.FlatBufferBuilder;
+import com.google.inject.Inject;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
@@ -38,22 +39,23 @@ public class TimelyUdpTestServerIT extends MacITBase {
     private static final Logger LOG = LoggerFactory.getLogger(TimelyUdpTestServerIT.class);
     private static final Long TEST_TIME = System.currentTimeMillis();
 
-    private TestServer testServer;
+    @Inject
+    TestServer testServer;
 
     @Before
     public void setup() throws Exception {
-        testServer = getRunningTestServer();
-    }
-
-    @After
-    public void tearDown() throws Exception {
-        AuthCache.resetSessionMaxAge();
-        testServer.shutdown();
+        startTimelyServer();
     }
 
     @Override
-    public void setupSSL(){
+    public void setupAndRunServer() throws Exception {
+        testServer.setup();
+        testServer.run();
+    }
 
+    @After
+    public void tearDownServer() throws Exception {
+        testServer.shutdown();
     }
 
     @Test

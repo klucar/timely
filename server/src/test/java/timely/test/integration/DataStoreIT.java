@@ -1,14 +1,11 @@
 package timely.test.integration;
 
-import com.google.inject.Inject;
-import org.junit.After;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import timely.api.request.timeseries.QueryRequest;
 import timely.api.request.timeseries.QueryRequest.SubQuery;
 import timely.api.response.timeseries.QueryResponse;
 import timely.test.IntegrationTest;
-import timely.validator.TimelyServer;
 
 import java.util.HashMap;
 import java.util.List;
@@ -26,16 +23,12 @@ public class DataStoreIT extends OneWaySSLBase {
     private static final long ONE_HOUR = TimeUnit.HOURS.toMillis(1);
     private static final long TEST_TIME = System.currentTimeMillis() - ONE_DAY;
 
-    @Inject
-    private TimelyServer server;
-
-    
-
     @Test
     public void testDefaultAgeOff() throws Exception {
         HashMap<String, Integer> ageOffSettings = new HashMap<>();
-        ageOffSettings.put("default",1);
+        ageOffSettings.put("default", 1);
         conf.setMetricAgeOffDays(ageOffSettings);
+        startTimelyServer();
 
         put("sys.cpu.user " + TEST_TIME + " 1.0 tag1=value1 tag2=value2", "sys.cpu.user " + (TEST_TIME + ONE_HOUR)
                 + " 3.0 tag1=value1 tag2=value2", "sys.cpu.user " + (TEST_TIME + (ONE_HOUR * 2))
@@ -65,6 +58,7 @@ public class DataStoreIT extends OneWaySSLBase {
         ageOffSettings.put("default", 1);
         ageOffSettings.put("sys.cpu.user", 1);
         conf.setMetricAgeOffDays(ageOffSettings);
+        startTimelyServer();
 
         put("sys.cpu.idle " + (TEST_TIME - ONE_DAY - (2 * ONE_HOUR)) + " 1.0 tag1=value1 tag2=value2", "sys.cpu.idle "
                 + (TEST_TIME - ONE_DAY - ONE_HOUR) + " 3.0 tag1=value1 tag2=value2", "sys.cpu.idle "

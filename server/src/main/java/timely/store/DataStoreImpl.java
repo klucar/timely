@@ -334,7 +334,6 @@ public class DataStoreImpl implements DataStore {
                             allSeries.put(key, downsamples);
                         }
                     }
-                    LOG.trace("allSeries: {}", allSeries);
                 } finally {
                     scanner.close();
                 }

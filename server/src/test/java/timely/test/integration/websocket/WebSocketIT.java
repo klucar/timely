@@ -161,13 +161,12 @@ public class WebSocketIT extends OneWaySSLBase {
     private EventLoopGroup group = null;
     private Channel ch = null;
     private ClientHandler handler = null;
-    private Server s = null;
     private String sessionId = null;
 
     @Before
     public void setup() throws Exception {
-        s = new Server();
-        s.run();
+        startTimelyServer();
+
         this.sessionId = UUID.randomUUID().toString();
         AuthCache.getCache().put(sessionId, new UsernamePasswordAuthenticationToken("test", "test1"));
         group = new NioEventLoopGroup();
@@ -241,7 +240,6 @@ public class WebSocketIT extends OneWaySSLBase {
             }
         } finally {
             ch.close().sync();
-            s.shutdown();
             group.shutdownGracefully();
         }
     }
@@ -363,7 +361,6 @@ public class WebSocketIT extends OneWaySSLBase {
             ch.writeAndFlush(new TextWebSocketFrame(JsonUtil.getObjectMapper().writeValueAsString(close)));
         } finally {
             ch.close().sync();
-            s.shutdown();
             group.shutdownGracefully();
         }
     }
@@ -387,7 +384,6 @@ public class WebSocketIT extends OneWaySSLBase {
             JsonUtil.getObjectMapper().readValue(response.get(0), AggregatorsResponse.class);
         } finally {
             ch.close().sync();
-            s.shutdown();
             group.shutdownGracefully();
         }
     }
@@ -409,7 +405,6 @@ public class WebSocketIT extends OneWaySSLBase {
             Assert.assertEquals("{\"metrics\":[]}", response.get(0));
         } finally {
             ch.close().sync();
-            s.shutdown();
             group.shutdownGracefully();
         }
     }
@@ -469,7 +464,6 @@ public class WebSocketIT extends OneWaySSLBase {
 
         } finally {
             ch.close().sync();
-            s.shutdown();
             group.shutdownGracefully();
         }
     }
@@ -511,7 +505,6 @@ public class WebSocketIT extends OneWaySSLBase {
 
         } finally {
             ch.close().sync();
-            s.shutdown();
             group.shutdownGracefully();
         }
     }
@@ -550,7 +543,6 @@ public class WebSocketIT extends OneWaySSLBase {
             assertEquals("sys.cpu.user", r.getSuggestions().get(0));
         } finally {
             ch.close().sync();
-            s.shutdown();
             group.shutdownGracefully();
         }
     }
@@ -564,7 +556,6 @@ public class WebSocketIT extends OneWaySSLBase {
             ch.writeAndFlush(new TextWebSocketFrame(json));
         } finally {
             ch.close().sync();
-            s.shutdown();
             group.shutdownGracefully();
         }
     }
@@ -585,7 +576,6 @@ public class WebSocketIT extends OneWaySSLBase {
             assertEquals(VersionRequest.VERSION, response.get(0));
         } finally {
             ch.close().sync();
-            s.shutdown();
             group.shutdownGracefully();
         }
     }

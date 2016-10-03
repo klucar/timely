@@ -28,10 +28,17 @@ public class TestCaptureRequestHandler extends SimpleChannelInboundHandler<Reque
     }
 
     @Override
-    protected void channelRead0(ChannelHandlerContext ctx, Request msg) throws Exception {
-        LOG.info("Received: {}", msg);
-        responses.add(msg);
+    public boolean acceptInboundMessage(Object msg) {
+        // doing this here instead of channelRead0 allows this to be put in the
+        // netty pipeline anywhere.
+        responses.add((Request) msg);
         counter.getAndIncrement();
+        return false;
+    }
+
+    @Override
+    protected void channelRead0(ChannelHandlerContext ctx, Request msg) throws Exception {
+        // do nothing
     }
 
     public long getCount() {

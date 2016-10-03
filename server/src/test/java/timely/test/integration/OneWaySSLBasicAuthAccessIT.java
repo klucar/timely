@@ -77,18 +77,11 @@ public class OneWaySSLBasicAuthAccessIT extends OneWaySSLBase {
         return con;
     }
 
-    private TimelyServer server;
-
     @Before
     public void setup() throws Exception {
-        server = getRunningServer();
-        connector.securityOperations().changeUserAuthorizations("root", new Authorizations("A", "B", "C", "D", "E", "F"));
-    }
-
-    @After
-    public void tearDown() throws Exception {
-        AuthCache.resetSessionMaxAge();
-        server.shutdown();
+        startTimelyServer();
+        connectorProvider.get().securityOperations()
+                .changeUserAuthorizations("root", new Authorizations("A", "B", "C", "D", "E", "F"));
     }
 
     @Test

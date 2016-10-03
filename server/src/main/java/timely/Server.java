@@ -101,6 +101,14 @@ public class Server implements TimelyServer {
 
     @Override
     public void shutdown() {
+
+        try {
+            LOG.info("Flushing datastore.");
+            dataStore.flush();
+        } catch (TimelyException e) {
+            LOG.error("Error flushing to server during shutdown", e);
+        }
+
         List<ChannelFuture> channelFutures = new ArrayList<>();
 
         LOG.info("Closing tcpChannelHandle");
@@ -162,13 +170,6 @@ public class Server implements TimelyServer {
             }
         });
 
-        try {
-            LOG.info("Flushing datastore.");
-            dataStore.flush();
-        } catch (TimelyException e) {
-            LOG.error("Error flushing to server during shutdown", e);
-        }
-
         LOG.info("Closing WebSocketRequestDecoder");
         WebSocketRequestDecoder.close();
 
@@ -176,6 +177,13 @@ public class Server implements TimelyServer {
         MetaCacheFactory.close();
 
         AuthCache.resetSessionMaxAge();
+
+        try {
+            LOG.info("Flushing datastore.");
+            dataStore.flush();
+        } catch (TimelyException e) {
+            LOG.error("Error flushing to server after shutdown", e);
+        }
 
         LOG.info("Server shut down.");
     }
@@ -299,9 +307,9 @@ public class Server implements TimelyServer {
             LOG.warn("Using generated self signed server certificate");
             Date begin = new Date();
             Date end = new Date(begin.getTime() + 86400000);
-            InetAddress localhost = InetAddress.getLocalHost();
-            LOG.warn("Self signed Cert hostname: {}", localhost);
-            SelfSignedCertificate ssc = new SelfSignedCertificate(localhost.getCanonicalHostName(), begin, end);
+            // InetAddress localhost = InetAddress.getLocalHost();
+            // LOG.warn("Self signed Cert hostname: {}", localhost);
+            SelfSignedCertificate ssc = new SelfSignedCertificate("localhost", begin, end);
             ssl = SslContextBuilder.forServer(ssc.certificate(), ssc.privateKey());
         } else {
             String cert = sslCfg.getCertificateFile();

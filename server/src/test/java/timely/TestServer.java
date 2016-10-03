@@ -1,6 +1,6 @@
 package timely;
 
-import com.google.inject.Inject;
+import com.google.inject.Injector;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.socket.DatagramChannel;
@@ -12,22 +12,39 @@ import io.netty.handler.codec.http.HttpObjectAggregator;
 import io.netty.handler.codec.http.HttpRequestDecoder;
 import io.netty.handler.logging.LoggingHandler;
 import io.netty.handler.ssl.SslContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import timely.netty.tcp.MetricsBufferDecoder;
 import timely.netty.tcp.TcpDecoder;
+import timely.netty.tcp.TcpPutHandler;
+import timely.netty.tcp.TcpVersionHandler;
 import timely.netty.udp.UdpDecoder;
 import timely.netty.udp.UdpPacketToByteBuf;
 import timely.test.TestCaptureRequestHandler;
 
 public class TestServer extends Server {
 
+    private static final Logger LOG = LoggerFactory.getLogger(TestServer.class);
+
     private final TestCaptureRequestHandler tcpRequests = new TestCaptureRequestHandler();
     private final TestCaptureRequestHandler httpRequests = new TestCaptureRequestHandler();
     private final TestCaptureRequestHandler udpRequests = new TestCaptureRequestHandler();
 
-    @Inject
-    Configuration config;
+    private static StandaloneServer standaloneServer;
 
     public TestServer() {
+        super();
+    }
+
+    @Override
+    public void shutdown() {
+        super.shutdown();
+    }
+
+    @Override
+    public void setup() {
+        super.setup();
+        standaloneServer.startMiniAccumulo(config);
     }
 
     @Override
@@ -36,6 +53,7 @@ public class TestServer extends Server {
 
             @Override
             protected void initChannel(SocketChannel ch) throws Exception {
+                LOG.info("Setting up Test Server Http Channel");
                 ch.pipeline().addLast("ssl", sslCtx.newHandler(ch.alloc()));
                 ch.pipeline().addLast("decompressor", new HttpContentDecompressor());
                 ch.pipeline().addLast("decoder", new HttpRequestDecoder());
@@ -52,10 +70,14 @@ public class TestServer extends Server {
 
             @Override
             protected void initChannel(SocketChannel ch) throws Exception {
+                LOG.info("Setting up Test Server Tcp Channel");
+
                 ch.pipeline().addLast("buffer", new MetricsBufferDecoder());
                 ch.pipeline().addLast("frame", new DelimiterBasedFrameDecoder(8192, true, Delimiters.lineDelimiter()));
                 ch.pipeline().addLast("putDecoder", new TcpDecoder());
                 ch.pipeline().addLast("capture", tcpRequests);
+                ch.pipeline().addLast("putHandler", new TcpPutHandler(dataStore));
+                ch.pipeline().addLast("versionHandler", new TcpVersionHandler());
             }
         };
     }
@@ -66,6 +88,8 @@ public class TestServer extends Server {
 
             @Override
             protected void initChannel(DatagramChannel ch) throws Exception {
+                LOG.info("Setting up Test Server Udp Channel");
+
                 ch.pipeline().addLast("logger", new LoggingHandler());
                 ch.pipeline().addLast("packetDecoder", new UdpPacketToByteBuf());
                 ch.pipeline().addLast("buffer", new MetricsBufferDecoder());

@@ -1,22 +1,11 @@
 package timely.test.integration.tcp;
 
 import com.google.flatbuffers.FlatBufferBuilder;
-import org.apache.accumulo.core.client.Connector;
-import org.apache.accumulo.core.client.ZooKeeperInstance;
-import org.apache.accumulo.core.client.security.tokens.PasswordToken;
-import org.apache.accumulo.core.data.Key;
-import org.apache.accumulo.core.data.Value;
-import org.apache.accumulo.core.iterators.IteratorUtil.IteratorScope;
-import org.apache.accumulo.core.security.Authorizations;
-import org.apache.accumulo.minicluster.MiniAccumuloCluster;
-import org.apache.accumulo.minicluster.MiniAccumuloConfig;
+import com.google.inject.Inject;
 import org.junit.*;
 import org.junit.experimental.categories.Category;
-import org.junit.rules.TemporaryFolder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import timely.Configuration;
-import timely.Server;
 import timely.TestServer;
 import timely.api.request.MetricRequest;
 import timely.api.request.VersionRequest;
@@ -31,16 +20,12 @@ import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.Socket;
 import java.nio.ByteBuffer;
-import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.concurrent.TimeUnit;
 
 import static com.google.common.util.concurrent.Uninterruptibles.sleepUninterruptibly;
-import static java.nio.charset.StandardCharsets.UTF_8;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
 import static timely.test.TestConfiguration.WAIT_SECONDS;
 
 /**
@@ -49,41 +34,41 @@ import static timely.test.TestConfiguration.WAIT_SECONDS;
 @Category(IntegrationTest.class)
 public class TimelyTcpIT extends MacITBase {
 
-    private static final Logger LOG = LoggerFactory.getLogger(TimelyTcpIT.class);
-    private static final Long TEST_TIME = System.currentTimeMillis();
+    static final Logger LOG = LoggerFactory.getLogger(TimelyTcpIT.class);
+    static final Long TEST_TIME = System.currentTimeMillis();
 
-    private TestServer testServer;
+    @Inject
+    TestServer testServer;
+
+    @Override
+    public void setupAndRunServer() throws Exception {
+        testServer.setup();
+        testServer.run();
+    }
 
     @Before
     public void setup() throws Exception {
-        testServer = getRunningTestServer();
+        startTimelyServer();
     }
 
     @After
-    public void tearDown() throws Exception {
-        AuthCache.resetSessionMaxAge();
+    public void tearDownServer() throws Exception {
         testServer.shutdown();
-    }
-
-    @Override
-    public void setupSSL(){
-
     }
 
     @Test
     public void testVersion() throws Exception {
-        try (Socket sock = new Socket("127.0.0.1", 54321);
-                PrintWriter writer = new PrintWriter(sock.getOutputStream(), true);) {
-            writer.write("version\n");
-            writer.flush();
-            while (1 != testServer.getTcpRequests().getCount()) {
-                Thread.sleep(5);
-            }
-            Assert.assertEquals(1, testServer.getTcpRequests().getResponses().size());
-            Assert.assertEquals(VersionRequest.class, testServer.getTcpRequests().getResponses().get(0).getClass());
-            VersionRequest v = (VersionRequest) testServer.getTcpRequests().getResponses().get(0);
-            Assert.assertEquals(VersionRequest.VERSION, v.getVersion());
+        Socket sock = new Socket("127.0.0.1", 54321);
+        PrintWriter writer = new PrintWriter(sock.getOutputStream(), true);
+        writer.write("version\n");
+        writer.flush();
+        while (1 != testServer.getTcpRequests().getCount()) {
+            Thread.sleep(5);
         }
+        Assert.assertEquals(1, testServer.getTcpRequests().getResponses().size());
+        Assert.assertEquals(VersionRequest.class, testServer.getTcpRequests().getResponses().get(0).getClass());
+        VersionRequest v = (VersionRequest) testServer.getTcpRequests().getResponses().get(0);
+        Assert.assertEquals(VersionRequest.VERSION, v.getVersion());
     }
 
     @Test
@@ -239,102 +224,6 @@ public class TimelyTcpIT extends MacITBase {
             writer.flush();
             sleepUninterruptibly(WAIT_SECONDS, TimeUnit.SECONDS);
             Assert.assertEquals(0, testServer.getTcpRequests().getCount());
-        }
-    }
-
-    @Test
-    public void testPersistence() throws Exception {
-        put("sys.cpu.user " + TEST_TIME + " 1.0 tag1=value1 tag2=value2", "sys.cpu.idle " + (TEST_TIME + 1)
-                + " 1.0 tag3=value3 tag4=value4", "sys.cpu.idle " + (TEST_TIME + 2) + " 1.0 tag3=value3 tag4=value4");
-        sleepUninterruptibly(WAIT_SECONDS, TimeUnit.SECONDS);
-        testServer.shutdown();
-
-        //todo cleanup
-        //final ZooKeeperInstance inst = new ZooKeeperInstance(mac.getClientConfig());
-        //final Connector connector = inst.getConnector("root", new PasswordToken("secret".getBytes(UTF_8)));
-
-        assertTrue(connector.namespaceOperations().exists("timely"));
-        assertTrue(connector.tableOperations().exists("timely.metrics"));
-        assertTrue(connector.tableOperations().exists("timely.meta"));
-        int count = 0;
-        for (final Entry<Key, Value> entry : connector.createScanner("timely.metrics", Authorizations.EMPTY)) {
-            LOG.info("Entry: " + entry);
-            final double value = ByteBuffer.wrap(entry.getValue().get()).getDouble();
-            assertEquals(1.0, value, 1e-9);
-            count++;
-        }
-        assertEquals(6, count);
-        count = 0;
-        for (final Entry<Key, Value> entry : connector.createScanner("timely.meta", Authorizations.EMPTY)) {
-            LOG.info("Meta entry: " + entry);
-            count++;
-        }
-        assertEquals(10, count);
-        // count w/out versioning iterator to make sure that the optimization
-        // for writing is working
-        connector.tableOperations().removeIterator("timely.meta", "vers", EnumSet.of(IteratorScope.scan));
-        // wait for zookeeper propagation
-        sleepUninterruptibly(WAIT_SECONDS, TimeUnit.SECONDS);
-        count = 0;
-        for (final Entry<Key, Value> entry : connector.createScanner("timely.meta", Authorizations.EMPTY)) {
-            LOG.info("Meta no vers iter: " + entry);
-            count++;
-        }
-        assertEquals(10, count);
-    }
-
-    @Test
-    public void testPersistenceWithVisibility() throws Exception {
-        put("sys.cpu.user " + TEST_TIME + " 1.0 tag1=value1 tag2=value2", "sys.cpu.idle " + (TEST_TIME + 1)
-                + " 1.0 tag3=value3 tag4=value4 viz=(a|b)", "sys.cpu.idle " + (TEST_TIME + 2)
-                + " 1.0 tag3=value3 tag4=value4 viz=(c&b)");
-        sleepUninterruptibly(WAIT_SECONDS, TimeUnit.SECONDS);
-        testServer.shutdown();
-
-        // todo cleanup
-        //final ZooKeeperInstance inst = new ZooKeeperInstance(mac.getClientConfig());
-        //final Connector connector = inst.getConnector("root", new PasswordToken("secret".getBytes(UTF_8)));
-        connector.securityOperations().changeUserAuthorizations("root", new Authorizations("a", "b", "c"));
-
-        int count = 0;
-        for (final Map.Entry<Key, Value> entry : connector.createScanner("timely.metrics", Authorizations.EMPTY)) {
-            LOG.info("Entry: " + entry);
-            final double value = ByteBuffer.wrap(entry.getValue().get()).getDouble();
-            assertEquals(1.0, value, 1e-9);
-            count++;
-        }
-        assertEquals(2, count);
-        count = 0;
-        Authorizations auth1 = new Authorizations("a");
-        for (final Map.Entry<Key, Value> entry : connector.createScanner("timely.metrics", auth1)) {
-            LOG.info("Entry: " + entry);
-            final double value = ByteBuffer.wrap(entry.getValue().get()).getDouble();
-            assertEquals(1.0, value, 1e-9);
-            count++;
-        }
-        assertEquals(4, count);
-        count = 0;
-        Authorizations auth2 = new Authorizations("b", "c");
-        for (final Map.Entry<Key, Value> entry : connector.createScanner("timely.metrics", auth2)) {
-            LOG.info("Entry: " + entry);
-            final double value = ByteBuffer.wrap(entry.getValue().get()).getDouble();
-            assertEquals(1.0, value, 1e-9);
-            count++;
-        }
-        assertEquals(6, count);
-    }
-
-    private void put(String... lines) throws Exception {
-        StringBuffer format = new StringBuffer();
-        for (String line : lines) {
-            format.append("put ");
-            format.append(line);
-            format.append("\n");
-        }
-        try (Socket sock = new Socket("127.0.0.1", 54321);
-                PrintWriter writer = new PrintWriter(sock.getOutputStream(), true);) {
-            writer.write(format.toString());
-            writer.flush();
         }
     }
 

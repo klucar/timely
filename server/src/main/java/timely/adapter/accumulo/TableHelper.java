@@ -28,8 +28,8 @@ public class TableHelper {
     @Inject
     ConnectorProvider connectorProvider;
 
-
-    public TableHelper() { }
+    public TableHelper() {
+    }
 
     private boolean tableExists(String table) {
         final Map<String, String> tableIdMap = connectorProvider.get().tableOperations().tableIdMap();
@@ -74,7 +74,8 @@ public class TableHelper {
 
     private void removeAgeOffIterators(String tableName) throws AccumuloSecurityException, AccumuloException,
             TableNotFoundException {
-        Map<String, EnumSet<IteratorUtil.IteratorScope>> iters = connectorProvider.get().tableOperations().listIterators(tableName);
+        Map<String, EnumSet<IteratorUtil.IteratorScope>> iters = connectorProvider.get().tableOperations()
+                .listIterators(tableName);
         for (String name : iters.keySet()) {
             if (name.startsWith("ageoff")) {
                 connectorProvider.get().tableOperations().removeIterator(tableName, name, AGEOFF_SCOPES);

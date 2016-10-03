@@ -41,16 +41,9 @@ public class HttpApiIT extends OneWaySSLBase {
 
     private static final Long TEST_TIME = System.currentTimeMillis();
 
-    private TimelyServer server;
-
     @Before
     public void setup() throws Exception {
-        server = getRunningServer();
-    }
-
-    @After
-    public void tearDown() {
-        server.shutdown();
+        startTimelyServer();
     }
 
     @Test

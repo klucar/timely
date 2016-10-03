@@ -8,7 +8,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.context.ConfigurableApplicationContext;
 import timely.guice.TimelyModule;
-import timely.guice.TimelyServerProvider;
 import timely.validator.TimelyServer;
 
 import java.util.concurrent.CountDownLatch;
@@ -25,8 +24,6 @@ public class TimelyRunner {
     private static ConfigurableApplicationContext applicationContext;
 
     @Inject
-    private TimelyServerProvider serverProvider;
-
     private TimelyServer server;
 
     public static void main(String[] args) throws Exception {
@@ -42,7 +39,6 @@ public class TimelyRunner {
     }
 
     private void runServer() {
-        server = serverProvider.get();
         server.setup();
         try {
             server.run();

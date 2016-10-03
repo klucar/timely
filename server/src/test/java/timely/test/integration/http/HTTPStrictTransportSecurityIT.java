@@ -19,16 +19,9 @@ import static org.junit.Assert.assertEquals;
 @Category(IntegrationTest.class)
 public class HTTPStrictTransportSecurityIT extends OneWaySSLBase {
 
-    private TimelyServer server;
-
     @Before
-    public void before() throws Exception {
-        server = getRunningServer();
-    }
-
-    @After
-    public void after() throws Exception {
-        server.shutdown();
+    public void setup() throws Exception {
+        startTimelyServer();
     }
 
     @Test

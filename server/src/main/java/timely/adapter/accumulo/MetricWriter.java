@@ -135,7 +135,7 @@ public class MetricWriter {
         return metricsWriter.get();
     }
 
-    public void flushWriters() {
+    public synchronized void flushWriters() {
         writers.forEach(w -> {
             try {
                 w.close();
