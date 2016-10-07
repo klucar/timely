@@ -19,7 +19,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.security.core.Authentication;
 
 import timely.Configuration;
-import timely.auth.AuthCache;
+import timely.cache.AuthCache;
 import timely.netty.Constants;
 import timely.netty.http.TimelyHttpHandler;
 

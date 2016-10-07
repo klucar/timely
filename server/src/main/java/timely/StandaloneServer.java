@@ -25,6 +25,7 @@ public class StandaloneServer extends Server {
 
     public StandaloneServer() {
         super();
+        LOG.info("Creating StandaloneServer");
     }
 
     private static File tempDir;

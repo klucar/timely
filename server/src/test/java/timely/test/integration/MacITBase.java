@@ -10,8 +10,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import timely.Configuration;
 import timely.TestModule;
-import timely.auth.AuthCache;
-import timely.guice.ConnectorProvider;
+import timely.cache.AuthCache;
+import timely.guice.provider.ConnectorProvider;
 import timely.test.TestConfiguration;
 import timely.validator.TimelyServer;
 
@@ -50,7 +50,6 @@ public abstract class MacITBase {
     public void startTimelyServer() throws Exception {
         injector = Guice.createInjector(new TestModule(conf));
         injector.injectMembers(this);
-        // injector.injectMembers(server);
         AuthCache.resetSessionMaxAge();
         setupAndRunServer();
         connector = connectorProvider.get();

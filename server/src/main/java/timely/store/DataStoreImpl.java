@@ -4,7 +4,9 @@ import com.google.inject.Inject;
 import io.netty.handler.codec.http.HttpResponseStatus;
 import org.apache.accumulo.core.client.*;
 import org.apache.accumulo.core.client.Scanner;
-import org.apache.accumulo.core.data.*;
+import org.apache.accumulo.core.data.Key;
+import org.apache.accumulo.core.data.Range;
+import org.apache.accumulo.core.data.Value;
 import org.apache.accumulo.core.iterators.user.RegExFilter;
 import org.apache.accumulo.core.security.Authorizations;
 import org.apache.accumulo.core.util.Pair;
@@ -13,9 +15,9 @@ import org.apache.hadoop.io.Text;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import timely.Configuration;
+import timely.adapter.accumulo.MetaAdapter;
 import timely.adapter.accumulo.MetricAdapter;
 import timely.adapter.accumulo.MetricWriter;
-import timely.adapter.accumulo.TableHelper;
 import timely.api.model.Meta;
 import timely.api.request.AuthenticatedRequest;
 import timely.api.request.timeseries.QueryRequest;
@@ -28,15 +30,15 @@ import timely.api.response.timeseries.QueryResponse;
 import timely.api.response.timeseries.SearchLookupResponse;
 import timely.api.response.timeseries.SearchLookupResponse.Result;
 import timely.api.response.timeseries.SuggestResponse;
-import timely.auth.AuthCache;
-import timely.guice.ConnectorProvider;
+import timely.cache.AuthCache;
+import timely.cache.MetaCache;
+import timely.guice.provider.ConnectorProvider;
 import timely.model.Metric;
 import timely.model.Tag;
 import timely.sample.Aggregator;
 import timely.sample.Downsample;
 import timely.sample.Sample;
 import timely.sample.iterators.DownsampleIterator;
-import timely.util.MetaKeySet;
 
 import java.io.IOException;
 import java.util.*;
@@ -46,6 +48,8 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.apache.accumulo.core.conf.AccumuloConfiguration.getTimeInMillis;
 
@@ -56,76 +60,59 @@ public class DataStoreImpl implements DataStore {
     private static final long METRICS_PERIOD = 30000;
     private static final long DEFAULT_DOWNSAMPLE_MS = 60000;
     private static final Pattern REGEX_TEST = Pattern.compile("^\\w+$");
-
-    @Inject
-    TableHelper tableHelper;
+    private static final long FIVE_MINUTES_IN_MS = TimeUnit.MINUTES.toMillis(5);
 
     @Inject
     MetricWriter metricWriter;
+
+    @Inject
+    MetaAdapter metaAdapter;
+
+    @Inject
+    MetaCache metaCache;
+
+    @Inject
+    AuthCache authCache;
 
     @Inject
     ConnectorProvider connectorProvider;
     Connector connector; // todo remove?
 
     @Inject
-    Configuration config;
+    Configuration config; // todo remove
 
-    private MetaCache metaCache = null;
+    // private MetaCache metaCache = null;
     private final AtomicLong lastCountTime = new AtomicLong(System.currentTimeMillis());
     private final AtomicReference<SortedMap<MetricTagK, Integer>> metaCounts = new AtomicReference<>(new TreeMap<>());
     private final InternalMetrics internalMetrics = new InternalMetrics();
     private final Timer internalMetricsTimer = new Timer(true);
-    private int scannerThreads;
     private boolean anonAccessAllowed = false;
+    private int scannerThreads;
 
-    private String metaTable;
-    private String metricsTable;
+    private String metaTable; // todo remove
+    private String metricsTable; // todo remove
 
     public DataStoreImpl() {
     }
 
     @Override
     public void initialize() {
-        connector = connectorProvider.get();
         metricWriter.initialize();
-        try {
-            metaTable = config.getMetaTable();
-            metricsTable = config.getMetricsTable();
+        internalMetricsTimer.schedule(new TimerTask() {
 
-            scannerThreads = config.getAccumulo().getScan().getThreads();
-
-            anonAccessAllowed = config.getSecurity().isAllowAnonymousAccess();
-
-            for (String table : new String[] { config.getMetricsTable(), config.getMetaTable() }) {
-                tableHelper.createNamespaceFromTableName(table);
-                tableHelper.createTableIfNotExists(table);
+            @Override
+            public void run() {
+                internalMetrics.getMetricsAndReset().forEach(m -> store(m));
             }
+        }, METRICS_PERIOD, METRICS_PERIOD);
+        // this.metaCache = MetaCacheFactory.getCache(config);
 
-            internalMetricsTimer.schedule(new TimerTask() {
+        scannerThreads = config.getAccumulo().getScan().getThreads();
+        anonAccessAllowed = config.getSecurity().isAllowAnonymousAccess();
+        connector = connectorProvider.get();
 
-                @Override
-                public void run() {
-                    internalMetrics.getMetricsAndReset().forEach(m -> store(m));
-                }
-
-            }, METRICS_PERIOD, METRICS_PERIOD);
-
-            this.metaCache = MetaCacheFactory.getCache(config);
-
-        } catch (AccumuloSecurityException e) {
-            e.printStackTrace();
-            throw new RuntimeException(e);
-        } catch (TableNotFoundException e) {
-            e.printStackTrace();
-            throw new RuntimeException(e);
-        } catch (AccumuloException e) {
-            e.printStackTrace();
-            throw new RuntimeException(e);
-        }
-        // catch (Exception e) {
-        // LOG.error("Unable to create DataStoreImpl: {}", e.getMessage());
-        // throw new RuntimeException(e);
-        // }
+        metricsTable = config.getMetricsTable(); // todo remove
+        metaTable = config.getMetaTable(); // todo remove
     }
 
     @Override
@@ -133,59 +120,14 @@ public class DataStoreImpl implements DataStore {
         LOG.trace("Received Store Request for: {}", metric);
 
         internalMetrics.incrementMetricsReceived(1);
-        List<Meta> toCache = new ArrayList<>(metric.getTags().size());
-        for (final Tag tag : metric.getTags()) {
-            Meta key = new Meta(metric.getName(), tag.getKey(), tag.getValue());
-            if (!metaCache.contains(key)) {
-                toCache.add(key);
-            }
-        }
-        if (!toCache.isEmpty()) {
-            final Set<Mutation> muts = new TreeSet<>((o1, o2) -> {
-                if (o1.equals(o2)) {
-                    return 0;
-                } else {
-                    if (o1.hashCode() < o2.hashCode()) {
-                        return -1;
-                    } else {
-                        return 1;
-                    }
-                }
-            });
-            MetaKeySet mks = new MetaKeySet();
-            toCache.forEach(m -> mks.addAll(m.toKeys()));
-            muts.addAll(mks.toMutations());
 
-            if (metricWriter.writeMetaMutations(muts)) {
-                internalMetrics.incrementMetaKeysInserted(mks.size());
-                metaCache.addAll(toCache);
-            } else {
-                LOG.error("unable to write metric meta mutations: {}", metric);
-            }
-        }
+        // write the metadata
+        int metaWritten = metricWriter.writeMeta(metric);
+        internalMetrics.incrementMetaKeysInserted(metaWritten);
 
-        if (metricWriter.writeMetricMutation(metric)) {
-            internalMetrics.incrementMetricKeysInserted(metric.getTags().size());
-        } else {
-            LOG.error("unable to write metric to table: {} ", metric);
-        }
-
-    }
-
-    private static final long FIVE_MINUTES_IN_MS = TimeUnit.MINUTES.toMillis(5);
-
-    private void updateMetricCounts() {
-        long now = System.currentTimeMillis();
-        if (now - lastCountTime.get() > FIVE_MINUTES_IN_MS) {
-            this.lastCountTime.set(now);
-            SortedMap<MetricTagK, Integer> update = new TreeMap<>();
-            for (Meta meta : this.metaCache) {
-                MetricTagK key = new MetricTagK(meta.getMetric(), meta.getTagKey());
-                Integer count = update.getOrDefault(key, 0);
-                update.put(key, count + 1);
-            }
-            this.metaCounts.set(update);
-        }
+        // write the metric
+        int metricsWritten = metricWriter.writeMetric(metric);
+        internalMetrics.incrementMetricKeysInserted(metricsWritten);
     }
 
     @Override
@@ -193,32 +135,35 @@ public class DataStoreImpl implements DataStore {
         SuggestResponse result = new SuggestResponse();
         try {
             if (request.getType().equals("metrics")) {
-                Range range;
+                Stream<Entry<Key, Value>> suggestStream;
+                // Range range;
                 if (request.getQuery().isPresent()) {
-                    Text start = new Text(Meta.METRIC_PREFIX + request.getQuery().get());
-                    Text endRow = new Text(start);
-                    endRow.append(new byte[] { (byte) 0xff }, 0, 1);
-                    range = new Range(start, endRow);
+
+                    // Text start = new Text(Meta.METRIC_PREFIX +
+                    // request.getQuery().get());
+                    // Text endRow = new Text(start);
+                    // endRow.append(new byte[] { (byte) 0xff }, 0, 1);
+                    // range = new Range(start, endRow);
+                    suggestStream = metaAdapter.getMetricMetaStream(request.getQuery().get());
                 } else {
                     // kind of a hack, maybe someone wants a metric with >100
                     // 0xff bytes?
-                    Text start = new Text(Meta.METRIC_PREFIX);
-                    byte last = (byte) 0xff;
-                    byte[] lastBytes = new byte[100];
-                    Arrays.fill(lastBytes, last);
-                    Text end = new Text(Meta.METRIC_PREFIX);
-                    end.append(lastBytes, 0, lastBytes.length);
-                    range = new Range(start, end);
+                    // Text start = new Text(Meta.METRIC_PREFIX);
+                    // byte last = (byte) 0xff;
+                    // byte[] lastBytes = new byte[100];
+                    // Arrays.fill(lastBytes, last);
+                    // Text end = new Text(Meta.METRIC_PREFIX);
+                    // end.append(lastBytes, 0, lastBytes.length);
+                    // range = new Range(start, end);
+                    suggestStream = metaAdapter.getRawMetricMetaStream();
                 }
-                Scanner scanner = connector.createScanner(metaTable, Authorizations.EMPTY);
-                scanner.setRange(range);
+                // Scanner scanner = connector.createScanner(metaTable,
+                // Authorizations.EMPTY);
+                // scanner.setRange(range);
                 List<String> metrics = new ArrayList<>();
-                for (Entry<Key, Value> metric : scanner) {
-                    metrics.add(metric.getKey().getRow().toString().substring(Meta.METRIC_PREFIX.length()));
-                    if (metrics.size() >= request.getMax()) {
-                        break;
-                    }
-                }
+                suggestStream.limit(request.getMax()).forEach(entry -> {
+                    metrics.add(entry.getKey().getRow().toString().substring(Meta.METRIC_PREFIX.length()));
+                });
                 result.setSuggestions(metrics);
             }
         } catch (Exception ex) {
@@ -241,39 +186,52 @@ public class DataStoreImpl implements DataStore {
         SearchLookupResponse result = new SearchLookupResponse();
         result.setType("LOOKUP");
         result.setMetric(msg.getQuery());
+
         Map<String, String> tags = new TreeMap<>();
         for (Tag tag : msg.getTags()) {
             tags.put(tag.getKey(), tag.getValue());
         }
         result.setTags(tags);
         result.setLimit(msg.getLimit());
+
         Map<String, Pattern> tagPatterns = new HashMap<>();
         tags.forEach((k, v) -> {
             tagPatterns.put(k, Pattern.compile(v));
         });
+
         try {
-            List<Result> resultField = new ArrayList<>();
-            Scanner scanner = connector.createScanner(metaTable, Authorizations.EMPTY);
-            Key start = new Key(Meta.VALUE_PREFIX + msg.getQuery());
-            Key end = start.followingKey(PartialKey.ROW);
-            Range range = new Range(start, end);
-            scanner.setRange(range);
-            tags.keySet().forEach(k -> scanner.fetchColumnFamily(new Text(k)));
-            int total = 0;
-            for (Entry<Key, Value> entry : scanner) {
-                Meta metaEntry = Meta.parse(entry.getKey(), entry.getValue());
-                if (matches(metaEntry.getTagKey(), metaEntry.getTagValue(), tagPatterns)) {
-                    if (resultField.size() < msg.getLimit()) {
+            // List<Result> resultField = new ArrayList<>();
+            Stream<Entry<Key, Value>> lookupStream;
+            lookupStream = metaAdapter.getLookupMetaStream(tags, msg.getQuery());
+
+            // Scanner scanner = connector.createScanner(metaTable,
+            // Authorizations.EMPTY);
+            // Key start = new Key(Meta.VALUE_PREFIX + msg.getQuery());
+            // Key end = start.followingKey(PartialKey.ROW);
+            // Range range = new Range(start, end);
+            // scanner.setRange(range);
+            // tags.keySet().forEach(k -> scanner.fetchColumnFamily(new
+            // Text(k)));
+            List<Result> resultField = lookupStream.limit(msg.getLimit())
+                    .map(e -> Meta.parse(e.getKey(), e.getValue()))
+                    .filter(m -> !matches(m.getTagKey(), m.getTagValue(), tagPatterns)).map(m -> {
                         Result r = new Result();
-                        r.putTag(metaEntry.getTagKey(), metaEntry.getTagValue());
-                        resultField.add(r);
-                    }
-                    total++;
-                }
-            }
+                        r.putTag(m.getTagKey(), m.getTagValue());
+                        return r;
+                    }).collect(Collectors.toList());
             result.setResults(resultField);
-            result.setTotalResults(total);
+            result.setTotalResults(resultField.size());
             result.setTime((int) (System.currentTimeMillis() - startMillis));
+            /*
+             * int total = 0; for (Entry<Key, Value> entry : scanner) { Meta
+             * metaEntry = Meta.parse(entry.getKey(), entry.getValue()); if
+             * (matches(metaEntry.getTagKey(), metaEntry.getTagValue(),
+             * tagPatterns)) { if (resultField.size() < msg.getLimit()) { Result
+             * r = new Result(); r.putTag(metaEntry.getTagKey(),
+             * metaEntry.getTagValue()); resultField.add(r); } total++; } }
+             * result.setResults(resultField); result.setTotalResults(total);
+             * result.setTime((int) (System.currentTimeMillis() - startMillis));
+             */
         } catch (Exception ex) {
             LOG.error("Error during lookup: " + ex.getMessage(), ex);
             throw new TimelyException(HttpResponseStatus.INTERNAL_SERVER_ERROR.code(), "Error during lookup: "
@@ -353,6 +311,20 @@ public class DataStoreImpl implements DataStore {
         }
     }
 
+    private void updateMetricCounts() {
+        long now = System.currentTimeMillis();
+        if (now - lastCountTime.get() > FIVE_MINUTES_IN_MS) {
+            this.lastCountTime.set(now);
+            SortedMap<MetricTagK, Integer> update = new TreeMap<>();
+            for (Meta meta : this.metaCache) {
+                MetricTagK key = new MetricTagK(meta.getMetric(), meta.getTagKey());
+                Integer count = update.getOrDefault(key, 0);
+                update.put(key, count + 1);
+            }
+            this.metaCounts.set(update);
+        }
+    }
+
     private Map<String, String> orderTags(List<String> tagOrder, Map<String, String> tags) {
         Map<String, String> order = new LinkedHashMap<>(tags.size());
         tagOrder.forEach(t -> order.put(t, tags.get(t)));
@@ -405,14 +377,10 @@ public class DataStoreImpl implements DataStore {
             }
         }
         List<String> result = new ArrayList<>(tags.keySet());
-        Collections.sort(result, new Comparator<String>() {
-
-            @Override
-            public int compare(String o1, String o2) {
-                // greater count lowers priority
-                return priority.get(o1).intValue() - priority.get(o2).intValue();
-            }
-        });
+        Collections.sort(result, (o1, o2) -> {
+            // greater count lowers priority
+                return priority.get(o1) - priority.get(o2);
+            });
         LOG.trace("Tag priority {}", result);
         return result;
     }

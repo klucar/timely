@@ -9,7 +9,6 @@ import org.slf4j.LoggerFactory;
 import timely.TestServer;
 import timely.api.request.MetricRequest;
 import timely.api.request.VersionRequest;
-import timely.auth.AuthCache;
 import timely.model.Metric;
 import timely.model.Tag;
 import timely.test.IntegrationTest;

@@ -1,14 +1,24 @@
 package timely.adapter.accumulo;
 
+import com.google.inject.Inject;
+import org.apache.accumulo.core.client.Connector;
+import org.apache.accumulo.core.client.Scanner;
+import org.apache.accumulo.core.client.TableNotFoundException;
 import org.apache.accumulo.core.data.Key;
+import org.apache.accumulo.core.data.PartialKey;
 import org.apache.accumulo.core.data.Range;
+import org.apache.accumulo.core.data.Value;
+import org.apache.accumulo.core.security.Authorizations;
 import org.apache.hadoop.io.Text;
+import timely.Configuration;
 import timely.api.model.Meta;
-import timely.model.Value;
+import timely.guice.provider.ConnectorProvider;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
+import java.util.*;
+import java.util.Map.Entry;
+import java.util.regex.Pattern;
+import java.util.stream.Stream;
+import java.util.stream.StreamSupport;
 
 /**
  * Interface for Meta model to Accumulo
@@ -19,6 +29,52 @@ public class MetaAdapter {
     private static final String METRIC_PREFIX = "m:";
     private static final String TAG_PREFIX = "t:";
     private static final String VALUE_PREFIX = "v:";
+
+    @Inject
+    ConnectorProvider connectorProvider;
+    Connector connector;
+
+    @Inject
+    Configuration config;
+
+    public MetaAdapter() {
+    }
+
+    public Stream<Entry<Key, Value>> getMetricMetaStream(String metric) throws TableNotFoundException {
+        return getMetaStream(getMetricStart(metric), getMetricEnd(metric));
+    }
+
+    public Stream<Entry<Key, Value>> getRawMetricMetaStream() throws TableNotFoundException {
+        return getMetaStream(getRawMetricStart(), getRawMetricEnd());
+    }
+
+    public Stream<Entry<Key, Value>> getLookupMetaStream(Map<String, String> tags, String metric)
+            throws TableNotFoundException {
+        Map<String, Pattern> tagPatterns = new HashMap<>();
+        tags.forEach((k, v) -> {
+            tagPatterns.put(k, Pattern.compile(v));
+        });
+        Scanner scanner = connectorProvider.get().createScanner(config.getMetaTable(), Authorizations.EMPTY);
+        Key start = new Key(Meta.VALUE_PREFIX + metric);
+        Key end = start.followingKey(PartialKey.ROW);
+        Range range = new Range(start, end);
+        scanner.setRange(range);
+        tags.keySet().forEach(k -> scanner.fetchColumnFamily(new Text(k)));
+
+        return toStream(scanner);
+    }
+
+    private Stream<Entry<Key, Value>> getMetaStream(Text start, Text end) throws TableNotFoundException {
+        Scanner scanner = connectorProvider.get().createScanner(config.getMetaTable(), Authorizations.EMPTY);
+        scanner.setRange(new Range(start, end));
+        return toStream(scanner);
+    }
+
+    private static Stream<Entry<Key, Value>> toStream(Scanner scanner) {
+        scanner.iterator();
+        Iterable<Entry<Key, Value>> iterable = () -> scanner.iterator();
+        return StreamSupport.stream(iterable.spliterator(), false);
+    }
 
     public static List<Key> toKeys(Meta meta) {
         List<Key> keys = new ArrayList<>();
@@ -55,7 +111,10 @@ public class MetaAdapter {
     }
 
     private static Text getEnd(String prefix, String metric) {
-        return new Text(prefix + metric + "\\x0000");
+        Text end = getStart(prefix, metric);
+        end.append(new byte[] { (byte) 0xff }, 0, 1);
+        return end;
+        // return new Text(prefix + metric + "\\x0000");
     }
 
     public static Text getMetricStart(String metric) {

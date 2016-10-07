@@ -24,7 +24,7 @@ import timely.api.request.HttpPostRequest;
 import timely.api.request.Request;
 import timely.api.response.StrictTransportResponse;
 import timely.api.response.TimelyException;
-import timely.auth.AuthCache;
+import timely.cache.AuthCache;
 import timely.netty.Constants;
 
 public class HttpRequestDecoder extends MessageToMessageDecoder<FullHttpRequest> implements TimelyHttpHandler {

@@ -1,4 +1,4 @@
-package timely.guice;
+package timely.guice.provider;
 
 import com.google.inject.Inject;
 import com.google.inject.Provider;
@@ -12,7 +12,7 @@ import timely.Configuration;
 import java.util.Collections;
 
 /**
- * Created by jlkluca on 9/29/16.
+ *
  */
 public class ConnectorProvider implements Provider<Connector> {
 

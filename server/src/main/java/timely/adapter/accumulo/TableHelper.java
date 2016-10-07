@@ -6,7 +6,7 @@ import org.apache.accumulo.core.iterators.IteratorUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import timely.Configuration;
-import timely.guice.ConnectorProvider;
+import timely.guice.provider.ConnectorProvider;
 import timely.store.MetricAgeOffFilter;
 
 import java.util.EnumSet;

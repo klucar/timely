@@ -5,8 +5,7 @@ import io.netty.handler.ssl.util.SelfSignedCertificate;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
-import timely.Configuration;
-import timely.auth.AuthCache;
+import timely.cache.AuthCache;
 
 import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SSLContext;

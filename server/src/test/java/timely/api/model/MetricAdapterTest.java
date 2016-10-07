@@ -4,6 +4,9 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.google.inject.Guice;
+import com.google.inject.Inject;
+import com.google.inject.Injector;
 import org.apache.accumulo.core.client.lexicoder.LongLexicoder;
 import org.apache.accumulo.core.client.lexicoder.PairLexicoder;
 import org.apache.accumulo.core.client.lexicoder.StringLexicoder;
@@ -15,18 +18,26 @@ import org.junit.Before;
 import org.junit.Test;
 
 import timely.Configuration;
+import timely.TestModule;
 import timely.adapter.accumulo.MetricAdapter;
 import timely.api.response.MetricResponse;
-import timely.auth.VisibilityCache;
+import timely.cache.VisibilityCache;
 import timely.model.Metric;
 import timely.model.Tag;
 import timely.util.JsonUtil;
 
 public class MetricAdapterTest {
 
+    @Inject
+    VisibilityCache visibilityCache;
+
     @Before
     public void before() {
-        VisibilityCache.init(new Configuration());
+        Configuration config = new Configuration();
+        Injector injector = Guice.createInjector(new TestModule(config));
+        injector.injectMembers(this);
+
+        visibilityCache.initialize(config);
     }
 
     @Test

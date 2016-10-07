@@ -1,4 +1,4 @@
-package timely.auth;
+package timely.cache;
 
 import io.netty.handler.codec.http.HttpResponseStatus;
 

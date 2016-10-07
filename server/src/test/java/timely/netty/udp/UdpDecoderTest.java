@@ -1,30 +1,41 @@
 package timely.netty.udp;
 
+import com.google.inject.Guice;
+import com.google.inject.Inject;
+import com.google.inject.Injector;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 
 import java.util.ArrayList;
 import java.util.List;
 
-import org.apache.accumulo.core.security.ColumnVisibility;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
 import timely.Configuration;
+import timely.TestModule;
 import timely.adapter.accumulo.MetricAdapter;
 import timely.api.request.MetricRequest;
 import timely.model.Metric;
 import timely.model.Tag;
-import timely.auth.VisibilityCache;
+import timely.cache.VisibilityCache;
+import timely.test.TestConfiguration;
 
 public class UdpDecoderTest {
 
     private static final Long TEST_TIME = System.currentTimeMillis();
 
+    @Inject
+    VisibilityCache visibilityCache;
+
     @Before
     public void setup() {
-        VisibilityCache.init(new Configuration());
+        Configuration cfg = new Configuration();
+        Injector injector = Guice.createInjector(new TestModule(cfg));
+        injector.injectMembers(this);
+
+        visibilityCache.initialize(cfg);
     }
 
     @Test

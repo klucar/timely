@@ -18,7 +18,7 @@ import timely.Configuration;
 import timely.api.request.AuthenticatedRequest;
 import timely.api.request.WebSocketRequest;
 import timely.api.response.TimelyException;
-import timely.auth.AuthCache;
+import timely.cache.AuthCache;
 import timely.subscription.SubscriptionRegistry;
 import timely.util.JsonUtil;
 

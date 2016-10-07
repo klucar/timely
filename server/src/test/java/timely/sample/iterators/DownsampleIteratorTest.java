@@ -1,36 +1,22 @@
 package timely.sample.iterators;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
-
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.Map.Entry;
-import java.util.Set;
-import java.util.SortedMap;
-import java.util.TreeMap;
-
 import org.apache.accumulo.core.client.IteratorSetting;
-import org.apache.accumulo.core.data.ColumnUpdate;
-import org.apache.accumulo.core.data.Key;
-import org.apache.accumulo.core.data.Mutation;
-import org.apache.accumulo.core.data.Range;
-import org.apache.accumulo.core.data.Value;
+import org.apache.accumulo.core.data.*;
 import org.apache.accumulo.core.iterators.SortedKeyValueIterator;
 import org.apache.accumulo.core.iterators.SortedMapIterator;
 import org.junit.Before;
 import org.junit.Test;
-
-import timely.Configuration;
 import timely.adapter.accumulo.MetricAdapter;
 import timely.model.Metric;
 import timely.model.Tag;
-import timely.auth.VisibilityCache;
 import timely.sample.Downsample;
 import timely.sample.Sample;
 import timely.sample.aggregators.Avg;
+
+import java.util.*;
+import java.util.Map.Entry;
+
+import static org.junit.Assert.*;
 
 public class DownsampleIteratorTest {
 
@@ -38,47 +24,9 @@ public class DownsampleIteratorTest {
     final private SortedMap<Key, Value> testData2 = new TreeMap<>();
 
     @Before
-    public void before() {
-        VisibilityCache.init(new Configuration());
-    }
-
-    @Before
     public void createTestData() {
         createTestData1();
         createTestData2();
-    }
-
-    private void createTestData2() {
-        List<Tag> tags = Collections.singletonList(new Tag("host", "host1"));
-
-        for (long i = 0; i < 1000; i += 100) {
-            Metric m = new Metric("sys.loadAvg", i, .2, tags);
-            Mutation mutation = MetricAdapter.toMutation(m);
-            for (ColumnUpdate cu : mutation.getUpdates()) {
-                Key key = new Key(mutation.getRow(), cu.getColumnFamily(), cu.getColumnQualifier(),
-                        cu.getColumnVisibility(), cu.getTimestamp());
-                testData1.put(key, new Value(cu.getValue()));
-            }
-        }
-    }
-
-    void put(Map<Key, Value> testData, Metric m) {
-        Mutation mutation = MetricAdapter.toMutation(m);
-        for (ColumnUpdate cu : mutation.getUpdates()) {
-            Key key = new Key(mutation.getRow(), cu.getColumnFamily(), cu.getColumnQualifier(),
-                    cu.getColumnVisibility(), cu.getTimestamp());
-            testData.put(key, new Value(cu.getValue()));
-        }
-    }
-
-    private void createTestData1() {
-        List<Tag> tags = Collections.singletonList(new Tag("host", "host1"));
-        List<Tag> tags2 = Collections.singletonList(new Tag("host", "host2"));
-
-        for (long i = 0; i < 1000; i += 100) {
-            put(testData2, new Metric("sys.loadAvg", i, .2, tags));
-            put(testData2, new Metric("sys.loadAvg", i + 50, .5, tags2));
-        }
     }
 
     @Test
@@ -161,6 +109,39 @@ public class DownsampleIteratorTest {
         assertEquals(testData.lastKey(), key);
         Map<Set<Tag>, Downsample> samples = DownsampleIterator.decodeValue(iter.getTopValue());
         return samples;
+    }
+
+    private void createTestData2() {
+        List<Tag> tags = Collections.singletonList(new Tag("host", "host1"));
+
+        for (long i = 0; i < 1000; i += 100) {
+            Metric m = new Metric("sys.loadAvg", i, .2, tags);
+            Mutation mutation = MetricAdapter.toMutation(m);
+            for (ColumnUpdate cu : mutation.getUpdates()) {
+                Key key = new Key(mutation.getRow(), cu.getColumnFamily(), cu.getColumnQualifier(),
+                        cu.getColumnVisibility(), cu.getTimestamp());
+                testData1.put(key, new Value(cu.getValue()));
+            }
+        }
+    }
+
+    void put(Map<Key, Value> testData, Metric m) {
+        Mutation mutation = MetricAdapter.toMutation(m);
+        for (ColumnUpdate cu : mutation.getUpdates()) {
+            Key key = new Key(mutation.getRow(), cu.getColumnFamily(), cu.getColumnQualifier(),
+                    cu.getColumnVisibility(), cu.getTimestamp());
+            testData.put(key, new Value(cu.getValue()));
+        }
+    }
+
+    private void createTestData1() {
+        List<Tag> tags = Collections.singletonList(new Tag("host", "host1"));
+        List<Tag> tags2 = Collections.singletonList(new Tag("host", "host2"));
+
+        for (long i = 0; i < 1000; i += 100) {
+            put(testData2, new Metric("sys.loadAvg", i, .2, tags));
+            put(testData2, new Metric("sys.loadAvg", i + 50, .5, tags2));
+        }
     }
 
 }

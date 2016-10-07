@@ -23,7 +23,7 @@ import org.junit.Test;
 
 import timely.Configuration;
 import timely.api.request.auth.BasicAuthLoginRequest;
-import timely.auth.AuthCache;
+import timely.cache.AuthCache;
 import timely.netty.Constants;
 import timely.netty.http.HttpRequestDecoder;
 import timely.netty.http.auth.BasicAuthLoginRequestHandler;

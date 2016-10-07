@@ -1,6 +1,5 @@
 package timely;
 
-import com.google.inject.Injector;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.socket.DatagramChannel;

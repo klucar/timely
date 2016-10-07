@@ -5,17 +5,14 @@ import org.apache.accumulo.core.data.Key;
 import org.apache.accumulo.core.data.Value;
 import org.apache.accumulo.core.iterators.IteratorUtil.IteratorScope;
 import org.apache.accumulo.core.security.Authorizations;
-import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import timely.auth.AuthCache;
 import timely.test.IntegrationTest;
 import timely.test.TestConfiguration;
 import timely.test.integration.MacITBase;
-import timely.validator.TimelyServer;
 
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;

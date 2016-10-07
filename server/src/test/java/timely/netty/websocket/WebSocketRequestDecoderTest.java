@@ -31,7 +31,7 @@ import timely.api.request.timeseries.MetricsRequest;
 import timely.api.request.timeseries.QueryRequest;
 import timely.api.request.timeseries.SearchLookupRequest;
 import timely.api.request.timeseries.SuggestRequest;
-import timely.auth.AuthCache;
+import timely.cache.AuthCache;
 import timely.subscription.SubscriptionRegistry;
 import timely.test.CaptureChannelHandlerContext;
 import timely.test.TestConfiguration;

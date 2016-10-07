@@ -8,8 +8,6 @@ import org.apache.accumulo.core.data.Mutation;
 import org.apache.accumulo.core.data.Value;
 import org.apache.accumulo.core.security.ColumnVisibility;
 import org.apache.accumulo.core.util.ComparablePair;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import timely.model.Metric;
 import timely.model.Tag;
 import timely.model.parse.TagListParser;

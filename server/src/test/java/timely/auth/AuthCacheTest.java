@@ -14,6 +14,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 
 import timely.Configuration;
+import timely.cache.AuthCache;
 import timely.test.TestConfiguration;
 
 public class AuthCacheTest {

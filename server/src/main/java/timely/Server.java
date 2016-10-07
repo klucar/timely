@@ -5,15 +5,8 @@ import io.netty.bootstrap.Bootstrap;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.buffer.PooledByteBufAllocator;
 import io.netty.channel.*;
-import io.netty.channel.epoll.EpollDatagramChannel;
-import io.netty.channel.epoll.EpollEventLoopGroup;
-import io.netty.channel.epoll.EpollServerSocketChannel;
-import io.netty.channel.nio.NioEventLoopGroup;
-import io.netty.channel.socket.DatagramChannel;
 import io.netty.channel.socket.ServerSocketChannel;
 import io.netty.channel.socket.SocketChannel;
-import io.netty.channel.socket.nio.NioDatagramChannel;
-import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.handler.codec.DelimiterBasedFrameDecoder;
 import io.netty.handler.codec.Delimiters;
 import io.netty.handler.codec.http.*;
@@ -30,8 +23,10 @@ import io.netty.util.internal.SystemPropertyUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import timely.api.response.TimelyException;
-import timely.auth.AuthCache;
-import timely.auth.VisibilityCache;
+import timely.cache.AuthCache;
+import timely.cache.AuthorizationsCache;
+import timely.cache.MetaCache;
+import timely.cache.VisibilityCache;
 import timely.netty.http.*;
 import timely.netty.http.auth.BasicAuthLoginRequestHandler;
 import timely.netty.http.auth.X509LoginRequestHandler;
@@ -52,11 +47,9 @@ import timely.netty.websocket.subscription.WSCreateSubscriptionRequestHandler;
 import timely.netty.websocket.subscription.WSRemoveSubscriptionRequestHandler;
 import timely.netty.websocket.timeseries.*;
 import timely.store.DataStore;
-import timely.store.MetaCacheFactory;
 import timely.validator.TimelyServer;
 
 import java.io.File;
-import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -68,11 +61,7 @@ import java.util.concurrent.TimeUnit;
 public class Server implements TimelyServer {
 
     private static final Logger LOG = LoggerFactory.getLogger(Server.class);
-    private static final int EPOLL_MIN_MAJOR_VERSION = 2;
-    private static final int EPOLL_MIN_MINOR_VERSION = 6;
-    private static final int EPOLL_MIN_PATCH_VERSION = 32;
-    private static final String OS_NAME = "os.name";
-    private static final String OS_VERSION = "os.version";
+
     private static final String WS_PATH = "/websocket";
 
     @Inject
@@ -81,20 +70,41 @@ public class Server implements TimelyServer {
     @Inject
     protected DataStore dataStore;
 
-    private EventLoopGroup tcpWorkerGroup = null;
-    private EventLoopGroup tcpBossGroup = null;
-    private EventLoopGroup httpWorkerGroup = null;
-    private EventLoopGroup httpBossGroup = null;
-    private EventLoopGroup wsWorkerGroup = null;
-    private EventLoopGroup wsBossGroup = null;
-    private EventLoopGroup udpBossGroup = null;
-    private EventLoopGroup udpWorkerGroup = null;
+    @Inject
+    AuthorizationsCache authorizationsCache;
+
+    @Inject
+    MetaCache metaCache;
+
+    @Inject
+    VisibilityCache visibilityCache;
+
+    @Inject
+    EventLoopGroup tcpWorkerGroup;
+    @Inject
+    EventLoopGroup tcpBossGroup;
+    @Inject
+    EventLoopGroup httpWorkerGroup;
+    @Inject
+    EventLoopGroup httpBossGroup;
+    @Inject
+    EventLoopGroup wsWorkerGroup;
+    @Inject
+    EventLoopGroup wsBossGroup;
+    @Inject
+    EventLoopGroup udpBossGroup;
+    @Inject
+    EventLoopGroup udpWorkerGroup;
+
+    @Inject
+    Class<? extends ServerSocketChannel> channelClass;
+    @Inject
+    Class<? extends Channel> datagramChannelClass;
+
     private Channel tcpChannelHandle = null;
     private Channel httpChannelHandle = null;
     private Channel wsChannelHandle = null;
     private Channel udpChannelHandle = null;
-    private Class<? extends ServerSocketChannel> channelClass = null;
-    private Class<? extends Channel> datagramChannelClass = null;
 
     public Server() {
     }
@@ -126,7 +136,7 @@ public class Server implements TimelyServer {
         // wait for the channels to shutdown
         channelFutures.forEach(f -> {
             try {
-                f.get();
+                f.awaitUninterruptibly();
             } catch (final Exception e) {
                 LOG.error("Error while shutting down channel: {}", f.channel().config());
                 LOG.error("{}", e.getMessage());
@@ -174,7 +184,7 @@ public class Server implements TimelyServer {
         WebSocketRequestDecoder.close();
 
         LOG.info("Closing MetaCacheFactory");
-        MetaCacheFactory.close();
+        metaCache.close();
 
         AuthCache.resetSessionMaxAge();
 
@@ -190,39 +200,10 @@ public class Server implements TimelyServer {
 
     @Override
     public void setup() {
-        // Initialize the MetaCache
-        MetaCacheFactory.getCache(config);
+        AuthCache.setSessionMaxAge(config); // todo remove this old cache
 
-        // initialize the auth cache
-        AuthCache.setSessionMaxAge(config);
-
-        // Initialize the VisibilityCache
-        VisibilityCache.init(config);
-
-        final boolean useEpoll = useEpoll();
-        if (useEpoll) {
-            tcpWorkerGroup = new EpollEventLoopGroup();
-            tcpBossGroup = new EpollEventLoopGroup();
-            httpWorkerGroup = new EpollEventLoopGroup();
-            httpBossGroup = new EpollEventLoopGroup();
-            wsWorkerGroup = new EpollEventLoopGroup();
-            wsBossGroup = new EpollEventLoopGroup();
-            udpWorkerGroup = new EpollEventLoopGroup();
-            udpBossGroup = new EpollEventLoopGroup();
-            channelClass = EpollServerSocketChannel.class;
-            datagramChannelClass = EpollDatagramChannel.class;
-        } else {
-            tcpWorkerGroup = new NioEventLoopGroup();
-            tcpBossGroup = new NioEventLoopGroup();
-            httpWorkerGroup = new NioEventLoopGroup();
-            httpBossGroup = new NioEventLoopGroup();
-            wsWorkerGroup = new NioEventLoopGroup();
-            wsBossGroup = new NioEventLoopGroup();
-            udpWorkerGroup = new NioEventLoopGroup();
-            udpBossGroup = new NioEventLoopGroup();
-            channelClass = NioServerSocketChannel.class;
-            datagramChannelClass = NioDatagramChannel.class;
-        }
+        // todo log other injection specifics?
+        // todo is setup method still needed?
         LOG.info("Using channel class {}", channelClass.getSimpleName());
     }
 
@@ -234,6 +215,7 @@ public class Server implements TimelyServer {
                 SystemPropertyUtil.getInt("io.netty.eventLoopThreads", Runtime.getRuntime().availableProcessors() * 2));
         config.getAccumulo().getWrite().setThreads(nettyThreads);
 
+        LOG.info("Bootstrapping TCP Server");
         final ServerBootstrap tcpServer = new ServerBootstrap();
         tcpServer.group(tcpBossGroup, tcpWorkerGroup);
         tcpServer.channel(channelClass);
@@ -246,7 +228,9 @@ public class Server implements TimelyServer {
         final String tcpIp = config.getServer().getIp();
         tcpChannelHandle = tcpServer.bind(tcpIp, tcpPort).sync().channel();
         final String tcpAddress = ((InetSocketAddress) tcpChannelHandle.localAddress()).getAddress().getHostAddress();
+        LOG.info("TCP Server running at {} : {}", tcpAddress, tcpPort);
 
+        LOG.info("Bootstrapping HTTP Server");
         final int httpPort = config.getHttp().getPort();
         final String httpIp = config.getHttp().getIp();
         SslContext sslCtx = createSSLContext();
@@ -269,7 +253,9 @@ public class Server implements TimelyServer {
         httpServer.option(ChannelOption.SO_KEEPALIVE, true);
         httpChannelHandle = httpServer.bind(httpIp, httpPort).sync().channel();
         final String httpAddress = ((InetSocketAddress) httpChannelHandle.localAddress()).getAddress().getHostAddress();
+        LOG.info("HTTP server running at {} : {}", httpAddress, httpPort);
 
+        LOG.info("Bootstrapping WebSocket server");
         final int wsPort = config.getWebsocket().getPort();
         final String wsIp = config.getWebsocket().getIp();
         final ServerBootstrap wsServer = new ServerBootstrap();
@@ -282,7 +268,9 @@ public class Server implements TimelyServer {
         wsServer.option(ChannelOption.SO_KEEPALIVE, true);
         wsChannelHandle = wsServer.bind(wsIp, wsPort).sync().channel();
         final String wsAddress = ((InetSocketAddress) wsChannelHandle.localAddress()).getAddress().getHostAddress();
+        LOG.info("WebSocket server running at {} : {}", wsAddress, wsPort);
 
+        LOG.info("Boostrapping UDP server");
         final int udpPort = config.getServer().getUdpPort();
         final String udpIp = config.getServer().getIp();
         final Bootstrap udpServer = new Bootstrap();
@@ -292,13 +280,14 @@ public class Server implements TimelyServer {
         udpServer.option(ChannelOption.ALLOCATOR, PooledByteBufAllocator.DEFAULT);
         udpChannelHandle = udpServer.bind(udpIp, udpPort).sync().channel();
         final String udpAddress = ((InetSocketAddress) wsChannelHandle.localAddress()).getAddress().getHostAddress();
+        LOG.info("UDP server running at {} : {}", udpAddress, udpPort);
 
         LOG.info(
-                "Server started. Listening on {}:{} for TCP traffic, {}:{} for HTTP traffic, {}:{} for WebSocket traffic, and {}:{} for UDP traffic",
+                "All servers started. Listening on {}:{} for TCP traffic, {}:{} for HTTP traffic, {}:{} for WebSocket traffic, and {}:{} for UDP traffic",
                 tcpAddress, tcpPort, httpAddress, httpPort, wsAddress, wsPort, udpAddress, udpPort);
     }
 
-    protected SslContext createSSLContext() throws Exception {
+    private SslContext createSSLContext() throws Exception {
 
         Configuration.Ssl sslCfg = config.getSecurity().getSsl();
         Boolean generate = sslCfg.isUseGeneratedKeypair();
@@ -307,8 +296,6 @@ public class Server implements TimelyServer {
             LOG.warn("Using generated self signed server certificate");
             Date begin = new Date();
             Date end = new Date(begin.getTime() + 86400000);
-            // InetAddress localhost = InetAddress.getLocalHost();
-            // LOG.warn("Self signed Cert hostname: {}", localhost);
             SelfSignedCertificate ssc = new SelfSignedCertificate("localhost", begin, end);
             ssl = SslContextBuilder.forServer(ssc.certificate(), ssc.privateKey());
         } else {
@@ -342,139 +329,130 @@ public class Server implements TimelyServer {
     }
 
     protected ChannelHandler setupHttpChannel(SslContext sslCtx) {
+        return new HttpChannelInitializer(sslCtx);
+    }
 
-        return new ChannelInitializer<SocketChannel>() {
+    private class HttpChannelInitializer extends ChannelInitializer<SocketChannel> {
 
-            @Override
-            protected void initChannel(SocketChannel ch) throws Exception {
+        SslContext sslCtx;
 
-                ch.pipeline().addLast("ssl", sslCtx.newHandler(ch.alloc()));
-                ch.pipeline().addLast("encoder", new HttpResponseEncoder());
-                ch.pipeline().addLast("decoder", new HttpRequestDecoder());
-                ch.pipeline().addLast("non-secure", new NonSecureHttpHandler(config));
-                ch.pipeline().addLast("compressor", new HttpContentCompressor());
-                ch.pipeline().addLast("decompressor", new HttpContentDecompressor());
-                ch.pipeline().addLast("aggregator", new HttpObjectAggregator(8192));
-                ch.pipeline().addLast("chunker", new ChunkedWriteHandler());
-                final Configuration.Cors corsCfg = config.getHttp().getCors();
-                final CorsConfig.Builder ccb;
-                if (corsCfg.isAllowAnyOrigin()) {
-                    ccb = new CorsConfig.Builder();
-                } else {
-                    ccb = new CorsConfig.Builder(corsCfg.getAllowedOrigins().stream().toArray(String[]::new));
-                }
-                if (corsCfg.isAllowNullOrigin()) {
-                    ccb.allowNullOrigin();
-                }
-                if (corsCfg.isAllowCredentials()) {
-                    ccb.allowCredentials();
-                }
-                corsCfg.getAllowedMethods().stream().map(HttpMethod::valueOf).forEach(ccb::allowedRequestMethods);
-                corsCfg.getAllowedHeaders().forEach(ccb::allowedRequestHeaders);
-                CorsConfig cors = ccb.build();
-                LOG.trace("Cors configuration: {}", cors);
-                ch.pipeline().addLast("cors", new CorsHandler(cors));
-                ch.pipeline().addLast("queryDecoder", new timely.netty.http.HttpRequestDecoder(config));
-                ch.pipeline().addLast("fileServer", new HttpStaticFileServerHandler());
-                ch.pipeline().addLast("strict", new StrictTransportHandler(config));
-                ch.pipeline().addLast("login", new X509LoginRequestHandler(config));
-                ch.pipeline().addLast("doLogin", new BasicAuthLoginRequestHandler(config));
-                ch.pipeline().addLast("aggregators", new HttpAggregatorsRequestHandler());
-                ch.pipeline().addLast("metrics", new HttpMetricsRequestHandler(config));
-                ch.pipeline().addLast("query", new HttpQueryRequestHandler(dataStore));
-                ch.pipeline().addLast("search", new HttpSearchLookupRequestHandler(dataStore));
-                ch.pipeline().addLast("suggest", new HttpSuggestRequestHandler(dataStore));
-                ch.pipeline().addLast("version", new HttpVersionRequestHandler());
-                ch.pipeline().addLast("put", new HttpMetricPutHandler(dataStore));
-                ch.pipeline().addLast("error", new TimelyExceptionHandler());
+        HttpChannelInitializer(SslContext sslCtx) {
+            this.sslCtx = sslCtx;
+        }
+
+        @Override
+        protected void initChannel(SocketChannel ch) throws Exception {
+
+            ch.pipeline().addLast("ssl", sslCtx.newHandler(ch.alloc()));
+            ch.pipeline().addLast("encoder", new HttpResponseEncoder());
+            ch.pipeline().addLast("decoder", new HttpRequestDecoder());
+            ch.pipeline().addLast("non-secure", new NonSecureHttpHandler(config));
+            ch.pipeline().addLast("compressor", new HttpContentCompressor());
+            ch.pipeline().addLast("decompressor", new HttpContentDecompressor());
+            ch.pipeline().addLast("aggregator", new HttpObjectAggregator(8192));
+            ch.pipeline().addLast("chunker", new ChunkedWriteHandler());
+            final Configuration.Cors corsCfg = config.getHttp().getCors();
+            final CorsConfig.Builder ccb;
+            if (corsCfg.isAllowAnyOrigin()) {
+                ccb = new CorsConfig.Builder();
+            } else {
+                ccb = new CorsConfig.Builder(corsCfg.getAllowedOrigins().stream().toArray(String[]::new));
             }
-        };
+            if (corsCfg.isAllowNullOrigin()) {
+                ccb.allowNullOrigin();
+            }
+            if (corsCfg.isAllowCredentials()) {
+                ccb.allowCredentials();
+            }
+            corsCfg.getAllowedMethods().stream().map(HttpMethod::valueOf).forEach(ccb::allowedRequestMethods);
+            corsCfg.getAllowedHeaders().forEach(ccb::allowedRequestHeaders);
+            CorsConfig cors = ccb.build();
+            LOG.trace("Cors configuration: {}", cors);
+            ch.pipeline().addLast("cors", new CorsHandler(cors));
+            ch.pipeline().addLast("queryDecoder", new timely.netty.http.HttpRequestDecoder(config));
+            ch.pipeline().addLast("fileServer", new HttpStaticFileServerHandler());
+            ch.pipeline().addLast("strict", new StrictTransportHandler(config));
+            ch.pipeline().addLast("login", new X509LoginRequestHandler(config));
+            ch.pipeline().addLast("doLogin", new BasicAuthLoginRequestHandler(config));
+            ch.pipeline().addLast("aggregators", new HttpAggregatorsRequestHandler());
+            ch.pipeline().addLast("metrics", new HttpMetricsRequestHandler());
+            ch.pipeline().addLast("query", new HttpQueryRequestHandler(dataStore));
+            ch.pipeline().addLast("search", new HttpSearchLookupRequestHandler(dataStore));
+            ch.pipeline().addLast("suggest", new HttpSuggestRequestHandler(dataStore));
+            ch.pipeline().addLast("version", new HttpVersionRequestHandler());
+            ch.pipeline().addLast("put", new HttpMetricPutHandler(dataStore));
+            ch.pipeline().addLast("error", new TimelyExceptionHandler());
+        }
     }
 
     protected ChannelHandler setupUdpChannel() {
-        return new ChannelInitializer<DatagramChannel>() {
+        return new UdpChannelInitializer();
+    }
 
-            @Override
-            protected void initChannel(DatagramChannel ch) throws Exception {
-                ch.pipeline().addLast("logger", new LoggingHandler());
-                ch.pipeline().addLast("packetDecoder", new UdpPacketToByteBuf());
-                ch.pipeline().addLast("buffer", new MetricsBufferDecoder());
-                ch.pipeline().addLast("frame", new DelimiterBasedFrameDecoder(8192, true, Delimiters.lineDelimiter()));
-                ch.pipeline().addLast("putDecoder", new UdpDecoder());
-                ch.pipeline().addLast(udpWorkerGroup, "putHandler", new TcpPutHandler(dataStore));
-            }
-        };
+    private class UdpChannelInitializer extends ChannelInitializer<SocketChannel> {
+
+        @Override
+        protected void initChannel(SocketChannel ch) throws Exception {
+            ch.pipeline().addLast("logger", new LoggingHandler());
+            ch.pipeline().addLast("packetDecoder", new UdpPacketToByteBuf());
+            ch.pipeline().addLast("buffer", new MetricsBufferDecoder());
+            ch.pipeline().addLast("frame", new DelimiterBasedFrameDecoder(8192, true, Delimiters.lineDelimiter()));
+            ch.pipeline().addLast("putDecoder", new UdpDecoder());
+            ch.pipeline().addLast(udpWorkerGroup, "putHandler", new TcpPutHandler(dataStore));
+        }
+
     }
 
     protected ChannelHandler setupTcpChannel() {
-        return new ChannelInitializer<SocketChannel>() {
-
-            @Override
-            protected void initChannel(SocketChannel ch) throws Exception {
-                ch.pipeline().addLast("buffer", new MetricsBufferDecoder());
-                ch.pipeline().addLast("frame", new DelimiterBasedFrameDecoder(8192, true, Delimiters.lineDelimiter()));
-                ch.pipeline().addLast("putDecoder", new TcpDecoder());
-                ch.pipeline().addLast("putHandler", new TcpPutHandler(dataStore));
-                ch.pipeline().addLast("versionHandler", new TcpVersionHandler());
-            }
-        };
+        return new TcpChannelInitializer();
     }
 
-    protected ChannelHandler setupWSChannel(SslContext sslCtx) {
-        return new ChannelInitializer<SocketChannel>() {
+    private class TcpChannelInitializer extends ChannelInitializer<SocketChannel> {
 
-            @Override
-            protected void initChannel(SocketChannel ch) throws Exception {
-                ch.pipeline().addLast("ssl", sslCtx.newHandler(ch.alloc()));
-                ch.pipeline().addLast("httpServer", new HttpServerCodec());
-                ch.pipeline().addLast("aggregator", new HttpObjectAggregator(8192));
-                ch.pipeline().addLast("sessionExtractor", new WebSocketHttpCookieHandler(config));
-                ch.pipeline().addLast("idle-handler", new IdleStateHandler(config.getWebsocket().getTimeout(), 0, 0));
-                ch.pipeline().addLast("ws-protocol", new WebSocketServerProtocolHandler(WS_PATH, null, true));
-                ch.pipeline().addLast("wsDecoder", new WebSocketRequestDecoder(config));
-                ch.pipeline().addLast("aggregators", new WSAggregatorsRequestHandler());
-                ch.pipeline().addLast("metrics", new WSMetricsRequestHandler(config));
-                ch.pipeline().addLast("query", new WSQueryRequestHandler(dataStore));
-                ch.pipeline().addLast("lookup", new WSSearchLookupRequestHandler(dataStore));
-                ch.pipeline().addLast("suggest", new WSSuggestRequestHandler(dataStore));
-                ch.pipeline().addLast("version", new WSVersionRequestHandler());
-                ch.pipeline().addLast("put", new WSMetricPutHandler(dataStore));
-                ch.pipeline().addLast("create", new WSCreateSubscriptionRequestHandler(dataStore, config));
-                ch.pipeline().addLast("add", new WSAddSubscriptionRequestHandler());
-                ch.pipeline().addLast("remove", new WSRemoveSubscriptionRequestHandler());
-                ch.pipeline().addLast("close", new WSCloseSubscriptionRequestHandler());
-
-            }
-        };
+        @Override
+        protected void initChannel(SocketChannel ch) throws Exception {
+            ch.pipeline().addLast("buffer", new MetricsBufferDecoder());
+            ch.pipeline().addLast("frame", new DelimiterBasedFrameDecoder(8192, true, Delimiters.lineDelimiter()));
+            ch.pipeline().addLast("putDecoder", new TcpDecoder());
+            ch.pipeline().addLast("putHandler", new TcpPutHandler(dataStore));
+            ch.pipeline().addLast("versionHandler", new TcpVersionHandler());
+        }
 
     }
 
-    private static boolean useEpoll() {
+    protected ChannelHandler setupWSChannel(SslContext sslContext) {
+        return new WSChannelInitializer(sslContext);
+    }
 
-        // Should we just return true if this is Linux and if we get an error
-        // during Epoll
-        // setup handle it there?
-        final String os = SystemPropertyUtil.get(OS_NAME).toLowerCase().trim();
-        final String[] version = SystemPropertyUtil.get(OS_VERSION).toLowerCase().trim().split("\\.");
-        if (os.startsWith("linux") && version.length >= 3) {
-            final int major = Integer.parseInt(version[0]);
-            if (major > EPOLL_MIN_MAJOR_VERSION) {
-                return true;
-            } else if (major == EPOLL_MIN_MAJOR_VERSION) {
-                final int minor = Integer.parseInt(version[1]);
-                if (minor > EPOLL_MIN_MINOR_VERSION) {
-                    return true;
-                } else if (minor == EPOLL_MIN_MINOR_VERSION) {
-                    final int patch = Integer.parseInt(version[2].substring(0, 2));
-                    return patch >= EPOLL_MIN_PATCH_VERSION;
-                } else {
-                    return false;
-                }
-            } else {
-                return false;
-            }
-        } else {
-            return false;
+    private class WSChannelInitializer extends ChannelInitializer<SocketChannel> {
+
+        SslContext sslCtx;
+
+        WSChannelInitializer(SslContext sslCtx) {
+            this.sslCtx = sslCtx;
+        }
+
+        @Override
+        protected void initChannel(SocketChannel ch) throws Exception {
+            ch.pipeline().addLast("ssl", sslCtx.newHandler(ch.alloc()));
+            ch.pipeline().addLast("httpServer", new HttpServerCodec());
+            ch.pipeline().addLast("aggregator", new HttpObjectAggregator(8192));
+            ch.pipeline().addLast("sessionExtractor", new WebSocketHttpCookieHandler(config));
+            ch.pipeline().addLast("idle-handler", new IdleStateHandler(config.getWebsocket().getTimeout(), 0, 0));
+            ch.pipeline().addLast("ws-protocol", new WebSocketServerProtocolHandler(WS_PATH, null, true));
+            ch.pipeline().addLast("wsDecoder", new WebSocketRequestDecoder(config));
+            ch.pipeline().addLast("aggregators", new WSAggregatorsRequestHandler());
+            ch.pipeline().addLast("metrics", new WSMetricsRequestHandler());
+            ch.pipeline().addLast("query", new WSQueryRequestHandler(dataStore));
+            ch.pipeline().addLast("lookup", new WSSearchLookupRequestHandler(dataStore));
+            ch.pipeline().addLast("suggest", new WSSuggestRequestHandler(dataStore));
+            ch.pipeline().addLast("version", new WSVersionRequestHandler());
+            ch.pipeline().addLast("put", new WSMetricPutHandler(dataStore));
+            ch.pipeline().addLast("create", new WSCreateSubscriptionRequestHandler(dataStore, config));
+            ch.pipeline().addLast("add", new WSAddSubscriptionRequestHandler());
+            ch.pipeline().addLast("remove", new WSRemoveSubscriptionRequestHandler());
+            ch.pipeline().addLast("close", new WSCloseSubscriptionRequestHandler());
+
         }
     }
 

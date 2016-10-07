@@ -357,7 +357,7 @@ public class Configuration {
         private Integer tcpPort;
         @NotNull
         private Integer udpPort;
-        private Integer shutdownQuietPeriod = 5;
+        private Integer shutdownQuietPeriod = 1000;
 
         @NotNull
         public String getIp() {

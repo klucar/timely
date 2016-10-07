@@ -24,7 +24,6 @@ import org.junit.Test;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 
 import timely.Configuration;
-import timely.adapter.accumulo.MetricAdapter;
 import timely.api.request.MetricRequest;
 import timely.model.Metric;
 import timely.model.Tag;
@@ -36,7 +35,7 @@ import timely.api.request.timeseries.QueryRequest.Filter;
 import timely.api.request.timeseries.QueryRequest.RateOption;
 import timely.api.request.timeseries.QueryRequest.SubQuery;
 import timely.api.request.VersionRequest;
-import timely.auth.AuthCache;
+import timely.cache.AuthCache;
 import timely.netty.Constants;
 import timely.test.TestConfiguration;
 import timely.util.JsonUtil;

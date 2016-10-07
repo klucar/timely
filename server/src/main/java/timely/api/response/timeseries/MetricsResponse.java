@@ -1,5 +1,10 @@
 package timely.api.response.timeseries;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.netty.buffer.Unpooled;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
 import io.netty.handler.codec.http.FullHttpResponse;
@@ -7,34 +12,16 @@ import io.netty.handler.codec.http.HttpHeaders.Names;
 import io.netty.handler.codec.http.HttpResponseStatus;
 import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.codec.http.websocketx.TextWebSocketFrame;
-
-import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.TreeSet;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.MediaType;
-
-import timely.Configuration;
-import timely.adapter.accumulo.MetricAdapter;
 import timely.api.model.Meta;
+import timely.cache.MetaCache;
 import timely.netty.Constants;
-import timely.store.MetaCache;
-import timely.store.MetaCacheFactory;
 import timely.util.JsonUtil;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import java.nio.charset.StandardCharsets;
+import java.util.*;
 
 public class MetricsResponse {
 
@@ -62,17 +49,9 @@ public class MetricsResponse {
     private static final String TD_START = "<td>";
     private static final String TD_END = "</td>\n";
 
-    private Set<String> ignoredTags = Collections.emptySet();
-    private final Configuration conf;
+    MetaCache metaCache;
 
     public MetricsResponse() {
-        conf = null;
-    }
-
-    public MetricsResponse(Configuration conf) {
-        this.conf = conf;
-        ignoredTags = new HashSet<>(conf.getMetricsReportIgnoredTags());
-        ignoredTags.add(MetricAdapter.VISIBILITY_TAG);
     }
 
     public TextWebSocketFrame toWebSocketResponse(String acceptHeader) throws Exception {
@@ -94,9 +73,9 @@ public class MetricsResponse {
                 }
             }
         }
-        String result = null;
+        String result;
         if (negotiatedType.equals(MediaType.APPLICATION_JSON)) {
-            result = this.generateJson(JsonUtil.getObjectMapper());
+            result = this.generateJson();
         } else {
             result = this.generateHtml().toString();
         }
@@ -122,10 +101,10 @@ public class MetricsResponse {
                 }
             }
         }
-        byte[] buf = null;
+        byte[] buf;
         Object responseType = Constants.HTML_TYPE;
         if (negotiatedType.equals(MediaType.APPLICATION_JSON)) {
-            buf = this.generateJson(JsonUtil.getObjectMapper()).getBytes(StandardCharsets.UTF_8);
+            buf = this.generateJson().getBytes(StandardCharsets.UTF_8);
             responseType = Constants.JSON_TYPE;
         } else {
             buf = this.generateHtml().toString().getBytes(StandardCharsets.UTF_8);
@@ -138,9 +117,9 @@ public class MetricsResponse {
     }
 
     protected StringBuilder generateHtml() {
-        final MetaCache cache = MetaCacheFactory.getCache(conf);
+        // todo use a library for this
         TreeSet<Meta> tree = new TreeSet<>();
-        cache.forEach(m -> tree.add(m));
+        metaCache.forEach(m -> tree.add(m));
         final StringBuilder b = new StringBuilder();
         b.append(DOCTYPE);
         b.append(HTML_START);
@@ -149,7 +128,7 @@ public class MetricsResponse {
         b.append(TITLE);
         b.append(HEAD_END);
         b.append(HEADER_START);
-        b.append(HEADER_CONTENT).append(ignoredTags.toString()).append("</p>\n");
+        b.append(HEADER_CONTENT).append(metaCache.getIgnoredTags().toString()).append("</p>\n");
         b.append(HEADER_END);
         b.append(BODY_START);
         b.append(TABLE_START);
@@ -171,7 +150,7 @@ public class MetricsResponse {
             if (prevMetric == null) {
                 prevMetric = m.getMetric();
             }
-            if (!(this.ignoredTags.contains(m.getTagKey()))) {
+            if (!(metaCache.getIgnoredTags().contains(m.getTagKey()))) {
                 tags.append(m.getTagKey()).append("=").append(m.getTagValue()).append(" ");
             }
         }
@@ -179,23 +158,22 @@ public class MetricsResponse {
         b.append(TD_START).append(prevMetric).append(TD_END);
         b.append(TD_START).append(tags.toString()).append(TD_END);
         b.append(TR_END);
-        tags = null;
-        prevMetric = null;
         b.append(TABLE_END);
         b.append(BODY_END);
         b.append(HTML_END);
         return b;
     }
 
-    protected String generateJson(final ObjectMapper mapper) throws JsonProcessingException {
+    protected String generateJson() throws JsonProcessingException {
         // map non-ignored metrics to their list of tags
-        final MetaCache cache = MetaCacheFactory.getCache(conf);
+        // final MetaCache cache = MetaCacheFactory.getCache(conf);
+        ObjectMapper mapper = JsonUtil.getObjectMapper();
         Map<String, List<JsonNode>> metricTagMap = new HashMap<>();
-        cache.forEach(m -> {
+        metaCache.forEach(m -> {
             if (!metricTagMap.containsKey(m.getMetric())) {
                 metricTagMap.put(m.getMetric(), new ArrayList<>());
             }
-            if (!this.ignoredTags.contains(m.getTagKey())) {
+            if (!metaCache.getIgnoredTags().contains(m.getTagKey())) {
                 metricTagMap.get(m.getMetric()).add(createTag(m, mapper));
             }
         });
@@ -209,7 +187,7 @@ public class MetricsResponse {
         return mapper.writeValueAsString(metricsNode);
     }
 
-    private JsonNode createMetric(String metric, List<JsonNode> tags, ObjectMapper mapper) {
+    private static JsonNode createMetric(String metric, List<JsonNode> tags, ObjectMapper mapper) {
         ObjectNode metricNode = mapper.createObjectNode();
         metricNode.put("metric", metric);
         ArrayNode tagsArray = metricNode.putArray("tags");
@@ -217,7 +195,7 @@ public class MetricsResponse {
         return metricNode;
     }
 
-    private JsonNode createTag(Meta meta, ObjectMapper mapper) {
+    private static JsonNode createTag(Meta meta, ObjectMapper mapper) {
         ObjectNode tagNode = mapper.createObjectNode();
         tagNode.put("key", meta.getTagKey());
         tagNode.put("value", meta.getTagValue());

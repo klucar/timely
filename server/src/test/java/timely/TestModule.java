@@ -17,4 +17,5 @@ public class TestModule extends TimelyModule {
         bind(TimelyServer.class).toInstance(new StandaloneServer());
         bind(TestServer.class).toInstance(new TestServer());
     }
+
 }

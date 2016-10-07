@@ -6,12 +6,17 @@ import org.apache.accumulo.core.data.Mutation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import timely.Configuration;
-import timely.guice.ConnectorProvider;
+import timely.api.model.Meta;
+import timely.guice.provider.ConnectorProvider;
 import timely.model.Metric;
+import timely.model.Tag;
+import timely.cache.MetaCache;
+import timely.util.MetaKeySet;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.concurrent.TimeUnit;
 
 import static org.apache.accumulo.core.conf.AccumuloConfiguration.getMemoryInBytes;
@@ -30,6 +35,12 @@ public class MetricWriter {
 
     @Inject
     private ConnectorProvider connectorProvider;
+
+    @Inject
+    TableHelper tableHelper;
+
+    @Inject
+    MetaCache metaCache;
 
     private final BatchWriterConfig bwConfig = new BatchWriterConfig();
     private final List<BatchWriter> writers = new ArrayList<>();
@@ -53,12 +64,38 @@ public class MetricWriter {
 
         metaTable = configuration.getMetaTable();
         metricsTable = configuration.getMetricsTable();
+
+        for (String table : new String[] { metricsTable, metaTable }) {
+            try {
+                tableHelper.createNamespaceFromTableName(table);
+            } catch (AccumuloSecurityException e) {
+                LOG.error("AccumuloSecurityException while creating namespace: {}", e.getMessage());
+                throw new RuntimeException(e);
+            } catch (AccumuloException e) {
+                LOG.error("AccumuloException while creating namespace: {}", e.getMessage());
+                throw new RuntimeException(e);
+            }
+            try {
+                tableHelper.createTableIfNotExists(table);
+            } catch (AccumuloSecurityException e) {
+                LOG.error("AccumuloSecurityException while creating table: {}", e.getMessage());
+                throw new RuntimeException(e);
+            } catch (AccumuloException e) {
+                LOG.error("AccumuloException while creating table: {}", e.getMessage());
+                throw new RuntimeException(e);
+            } catch (TableNotFoundException e) {
+                LOG.error("TableNotFoundException while creating table: {}", e.getMessage());
+                throw new RuntimeException(e);
+            }
+        }
+
     }
 
-    public boolean writeMetricMutation(Metric metric) {
+    public int writeMetric(Metric metric) {
         try {
             getMetricsWriter().addMutation(MetricAdapter.toMutation(metric));
-            return true;
+            writeMeta(metric);
+            return metric.getTags().size();
         } catch (MutationsRejectedException e) {
             LOG.error("Unable to write to metrics table", e);
             try {
@@ -78,7 +115,41 @@ public class MetricWriter {
                 throw new RuntimeException(e1);
             }
         }
-        return false;
+        return 0;
+    }
+
+    public int writeMeta(Metric metric) {
+        List<Meta> toCache = new ArrayList<>(metric.getTags().size());
+        MetaKeySet mks = new MetaKeySet();
+        for (final Tag tag : metric.getTags()) {
+            Meta key = new Meta(metric.getName(), tag.getKey(), tag.getValue());
+            if (!metaCache.contains(key)) {
+                toCache.add(key);
+            }
+        }
+        if (!toCache.isEmpty()) {
+            final Set<Mutation> muts = new TreeSet<>((o1, o2) -> {
+                if (o1.equals(o2)) {
+                    return 0;
+                } else {
+                    if (o1.hashCode() < o2.hashCode()) {
+                        return -1;
+                    } else {
+                        return 1;
+                    }
+                }
+            });
+            toCache.forEach(m -> mks.addAll(MetaAdapter.toKeys(m)));
+            muts.addAll(mks.toMutations());
+            try {
+                getMetaWriter().addMutations(mks.toMutations());
+                metaCache.addAll(toCache);
+            } catch (MutationsRejectedException e) {
+                LOG.error("Metadata Mutations Rejected: {}", e.toString());
+                mks.clear();
+            }
+        }
+        return mks.size();
     }
 
     public boolean writeMetaMutations(Set<Mutation> muts) {
