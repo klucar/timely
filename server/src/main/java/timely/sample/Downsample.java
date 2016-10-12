@@ -1,5 +1,11 @@
 package timely.sample;
 
+import com.google.common.base.Preconditions;
+import org.apache.commons.lang3.builder.ToStringBuilder;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import timely.api.request.timeseries.QueryRequest.RateOption;
+
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.Serializable;
@@ -7,14 +13,6 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
-
-import org.apache.commons.lang3.builder.ToStringBuilder;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import com.google.common.base.Preconditions;
-
-import timely.api.request.timeseries.QueryRequest.RateOption;
 
 public class Downsample implements Iterable<Sample>, Serializable {
 

@@ -9,13 +9,8 @@ import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpResponseStatus;
 import io.netty.handler.codec.http.QueryStringDecoder;
 import io.netty.handler.codec.http.cookie.ServerCookieDecoder;
-
-import java.nio.charset.StandardCharsets;
-import java.util.List;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import timely.Configuration;
 import timely.api.annotation.AnnotationResolver;
 import timely.api.request.AuthenticatedRequest;
@@ -26,6 +21,9 @@ import timely.api.response.StrictTransportResponse;
 import timely.api.response.TimelyException;
 import timely.cache.AuthCache;
 import timely.netty.Constants;
+
+import java.nio.charset.StandardCharsets;
+import java.util.List;
 
 public class HttpRequestDecoder extends MessageToMessageDecoder<FullHttpRequest> implements TimelyHttpHandler {
 

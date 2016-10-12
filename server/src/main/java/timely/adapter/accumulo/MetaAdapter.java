@@ -32,7 +32,6 @@ public class MetaAdapter {
 
     @Inject
     ConnectorProvider connectorProvider;
-    Connector connector;
 
     @Inject
     Configuration config;

@@ -1,13 +1,9 @@
 package timely.api.request.timeseries;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.JsonNode;
 import io.netty.handler.codec.http.QueryStringDecoder;
-
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
-
 import org.apache.commons.lang3.builder.ToStringBuilder;
-
 import timely.api.annotation.Http;
 import timely.api.annotation.WebSocket;
 import timely.api.request.AuthenticatedRequest;
@@ -16,8 +12,9 @@ import timely.api.request.HttpPostRequest;
 import timely.api.request.WebSocketRequest;
 import timely.util.JsonUtil;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.databind.JsonNode;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
 
 @Http(path = "/api/suggest")
 @WebSocket(operation = "suggest")

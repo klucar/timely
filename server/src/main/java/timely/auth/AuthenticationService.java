@@ -1,13 +1,13 @@
 package timely.auth;
 
-import java.security.cert.X509Certificate;
-import java.util.ServiceConfigurationError;
-
 import org.springframework.beans.BeansException;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.support.ClassPathXmlApplicationContext;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.web.authentication.preauth.x509.SubjectDnX509PrincipalExtractor;
+
+import java.security.cert.X509Certificate;
+import java.util.ServiceConfigurationError;
 
 public class AuthenticationService {
 

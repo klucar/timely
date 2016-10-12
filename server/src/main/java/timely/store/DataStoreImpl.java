@@ -79,9 +79,8 @@ public class DataStoreImpl implements DataStore {
     Connector connector; // todo remove?
 
     @Inject
-    Configuration config; // todo remove
+    Configuration config; // todo remove ... need to encapsulate metric queries
 
-    // private MetaCache metaCache = null;
     private final AtomicLong lastCountTime = new AtomicLong(System.currentTimeMillis());
     private final AtomicReference<SortedMap<MetricTagK, Integer>> metaCounts = new AtomicReference<>(new TreeMap<>());
     private final InternalMetrics internalMetrics = new InternalMetrics();
@@ -105,14 +104,13 @@ public class DataStoreImpl implements DataStore {
                 internalMetrics.getMetricsAndReset().forEach(m -> store(m));
             }
         }, METRICS_PERIOD, METRICS_PERIOD);
-        // this.metaCache = MetaCacheFactory.getCache(config);
 
         scannerThreads = config.getAccumulo().getScan().getThreads();
         anonAccessAllowed = config.getSecurity().isAllowAnonymousAccess();
         connector = connectorProvider.get();
 
-        metricsTable = config.getMetricsTable(); // todo remove
-        metaTable = config.getMetaTable(); // todo remove
+        // metricsTable = config.getMetricsTable(); // todo remove
+        // metaTable = config.getMetaTable(); // todo remove
     }
 
     @Override
@@ -136,30 +134,11 @@ public class DataStoreImpl implements DataStore {
         try {
             if (request.getType().equals("metrics")) {
                 Stream<Entry<Key, Value>> suggestStream;
-                // Range range;
                 if (request.getQuery().isPresent()) {
-
-                    // Text start = new Text(Meta.METRIC_PREFIX +
-                    // request.getQuery().get());
-                    // Text endRow = new Text(start);
-                    // endRow.append(new byte[] { (byte) 0xff }, 0, 1);
-                    // range = new Range(start, endRow);
                     suggestStream = metaAdapter.getMetricMetaStream(request.getQuery().get());
                 } else {
-                    // kind of a hack, maybe someone wants a metric with >100
-                    // 0xff bytes?
-                    // Text start = new Text(Meta.METRIC_PREFIX);
-                    // byte last = (byte) 0xff;
-                    // byte[] lastBytes = new byte[100];
-                    // Arrays.fill(lastBytes, last);
-                    // Text end = new Text(Meta.METRIC_PREFIX);
-                    // end.append(lastBytes, 0, lastBytes.length);
-                    // range = new Range(start, end);
                     suggestStream = metaAdapter.getRawMetricMetaStream();
                 }
-                // Scanner scanner = connector.createScanner(metaTable,
-                // Authorizations.EMPTY);
-                // scanner.setRange(range);
                 List<String> metrics = new ArrayList<>();
                 suggestStream.limit(request.getMax()).forEach(entry -> {
                     metrics.add(entry.getKey().getRow().toString().substring(Meta.METRIC_PREFIX.length()));
@@ -200,38 +179,21 @@ public class DataStoreImpl implements DataStore {
         });
 
         try {
-            // List<Result> resultField = new ArrayList<>();
             Stream<Entry<Key, Value>> lookupStream;
             lookupStream = metaAdapter.getLookupMetaStream(tags, msg.getQuery());
 
-            // Scanner scanner = connector.createScanner(metaTable,
-            // Authorizations.EMPTY);
-            // Key start = new Key(Meta.VALUE_PREFIX + msg.getQuery());
-            // Key end = start.followingKey(PartialKey.ROW);
-            // Range range = new Range(start, end);
-            // scanner.setRange(range);
-            // tags.keySet().forEach(k -> scanner.fetchColumnFamily(new
-            // Text(k)));
+            // @fomatter:off
             List<Result> resultField = lookupStream.limit(msg.getLimit())
                     .map(e -> Meta.parse(e.getKey(), e.getValue()))
-                    .filter(m -> !matches(m.getTagKey(), m.getTagValue(), tagPatterns)).map(m -> {
+                    .filter(m -> matches(m.getTagKey(), m.getTagValue(), tagPatterns)).map(m -> {
                         Result r = new Result();
                         r.putTag(m.getTagKey(), m.getTagValue());
                         return r;
                     }).collect(Collectors.toList());
+            // @formatter:on
             result.setResults(resultField);
             result.setTotalResults(resultField.size());
             result.setTime((int) (System.currentTimeMillis() - startMillis));
-            /*
-             * int total = 0; for (Entry<Key, Value> entry : scanner) { Meta
-             * metaEntry = Meta.parse(entry.getKey(), entry.getValue()); if
-             * (matches(metaEntry.getTagKey(), metaEntry.getTagValue(),
-             * tagPatterns)) { if (resultField.size() < msg.getLimit()) { Result
-             * r = new Result(); r.putTag(metaEntry.getTagKey(),
-             * metaEntry.getTagValue()); resultField.add(r); } total++; } }
-             * result.setResults(resultField); result.setTotalResults(total);
-             * result.setTime((int) (System.currentTimeMillis() - startMillis));
-             */
         } catch (Exception ex) {
             LOG.error("Error during lookup: " + ex.getMessage(), ex);
             throw new TimelyException(HttpResponseStatus.INTERNAL_SERVER_ERROR.code(), "Error during lookup: "

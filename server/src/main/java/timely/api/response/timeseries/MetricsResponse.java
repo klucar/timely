@@ -27,7 +27,6 @@ public class MetricsResponse {
 
     private static final Logger LOG = LoggerFactory.getLogger(MetricsResponse.class);
 
-    // TODO get rid of this HTML monstronsity
     private static final String DOCTYPE = "<!DOCTYPE html>\n";
     private static final String META = "<meta charset=\"UTF-8\">\n";
     private static final String HTML_START = "<html>\n";
@@ -51,7 +50,8 @@ public class MetricsResponse {
 
     MetaCache metaCache;
 
-    public MetricsResponse() {
+    public MetricsResponse(MetaCache metaCache) {
+        this.metaCache = metaCache;
     }
 
     public TextWebSocketFrame toWebSocketResponse(String acceptHeader) throws Exception {
@@ -117,7 +117,8 @@ public class MetricsResponse {
     }
 
     protected StringBuilder generateHtml() {
-        // todo use a library for this
+        // todo use a library for this: templated Apache Freemarker or Code
+        // JSoup.
         TreeSet<Meta> tree = new TreeSet<>();
         metaCache.forEach(m -> tree.add(m));
         final StringBuilder b = new StringBuilder();

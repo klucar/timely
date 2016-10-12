@@ -1,13 +1,6 @@
 package timely.util;
 
-import java.util.Collections;
-import java.util.Map.Entry;
-
-import org.apache.accumulo.core.client.ClientConfiguration;
-import org.apache.accumulo.core.client.Connector;
-import org.apache.accumulo.core.client.Instance;
-import org.apache.accumulo.core.client.Scanner;
-import org.apache.accumulo.core.client.ZooKeeperInstance;
+import org.apache.accumulo.core.client.*;
 import org.apache.accumulo.core.client.security.tokens.PasswordToken;
 import org.apache.accumulo.core.data.Key;
 import org.apache.accumulo.core.data.Range;
@@ -16,10 +9,12 @@ import org.apache.commons.configuration.BaseConfiguration;
 import org.springframework.boot.Banner.Mode;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.context.ConfigurableApplicationContext;
-
-import timely.SpringBootstrap;
 import timely.Configuration;
+import timely.SpringBootstrap;
 import timely.api.model.Meta;
+
+import java.util.Collections;
+import java.util.Map.Entry;
 
 public class GetMetricTableSplitPoints {
 

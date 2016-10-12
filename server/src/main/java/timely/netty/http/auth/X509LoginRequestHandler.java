@@ -2,15 +2,13 @@ package timely.netty.http.auth;
 
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.ssl.SslHandler;
-
-import java.security.cert.X509Certificate;
-
 import org.springframework.security.core.Authentication;
 import org.springframework.security.web.authentication.preauth.PreAuthenticatedAuthenticationToken;
-
 import timely.Configuration;
 import timely.api.request.auth.X509LoginRequest;
 import timely.auth.AuthenticationService;
+
+import java.security.cert.X509Certificate;
 
 public class X509LoginRequestHandler extends TimelyLoginRequestHandler<X509LoginRequest> {
 

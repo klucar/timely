@@ -1,5 +1,6 @@
 package timely.netty.http;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelHandlerContext;
@@ -8,15 +9,11 @@ import io.netty.handler.codec.http.FullHttpResponse;
 import io.netty.handler.codec.http.HttpHeaders.Names;
 import io.netty.handler.codec.http.HttpResponseStatus;
 import io.netty.handler.codec.http.HttpVersion;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import timely.api.response.TimelyException;
 import timely.netty.Constants;
 import timely.util.JsonUtil;
-
-import com.fasterxml.jackson.core.JsonProcessingException;
 
 public interface TimelyHttpHandler {
 

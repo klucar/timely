@@ -9,10 +9,8 @@ import io.netty.handler.codec.http.HttpHeaders.Names;
 import io.netty.handler.codec.http.HttpResponseStatus;
 import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.ssl.NotSslRecordException;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import timely.Configuration;
 import timely.netty.Constants;
 

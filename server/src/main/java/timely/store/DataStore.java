@@ -1,11 +1,6 @@
 package timely.store;
 
-import java.util.List;
-import java.util.Map;
-
 import org.apache.accumulo.core.client.Scanner;
-
-import timely.model.Metric;
 import timely.api.request.timeseries.QueryRequest;
 import timely.api.request.timeseries.SearchLookupRequest;
 import timely.api.request.timeseries.SuggestRequest;
@@ -13,6 +8,10 @@ import timely.api.response.TimelyException;
 import timely.api.response.timeseries.QueryResponse;
 import timely.api.response.timeseries.SearchLookupResponse;
 import timely.api.response.timeseries.SuggestResponse;
+import timely.model.Metric;
+
+import java.util.List;
+import java.util.Map;
 
 public interface DataStore {
 

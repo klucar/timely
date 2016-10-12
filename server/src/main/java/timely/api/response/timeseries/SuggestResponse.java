@@ -1,12 +1,5 @@
 package timely.api.response.timeseries;
 
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
-
-import timely.api.response.timeseries.SuggestResponse.SuggestDeserializer;
-import timely.api.response.timeseries.SuggestResponse.SuggestSerializer;
-
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -17,6 +10,12 @@ import com.fasterxml.jackson.databind.JsonSerializer;
 import com.fasterxml.jackson.databind.SerializerProvider;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import timely.api.response.timeseries.SuggestResponse.SuggestDeserializer;
+import timely.api.response.timeseries.SuggestResponse.SuggestSerializer;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 
 @JsonSerialize(using = SuggestSerializer.class)
 @JsonDeserialize(using = SuggestDeserializer.class)

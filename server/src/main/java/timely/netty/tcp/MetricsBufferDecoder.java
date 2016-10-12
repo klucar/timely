@@ -1,17 +1,16 @@
 package timely.netty.tcp;
 
-import java.util.List;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import timely.api.flatbuffer.Metrics;
-import timely.api.request.MetricRequest;
-import timely.model.Metric;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.ByteToMessageDecoder;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import timely.api.flatbuffer.Metrics;
+import timely.api.request.MetricRequest;
+import timely.model.Metric;
 import timely.model.Tag;
+
+import java.util.List;
 
 public class MetricsBufferDecoder extends ByteToMessageDecoder {
 

@@ -1,10 +1,10 @@
 package timely.api.model;
 
-import java.util.ArrayList;
-import java.util.List;
-
 import org.apache.accumulo.core.data.Key;
 import org.apache.accumulo.core.data.Value;
+
+import java.util.ArrayList;
+import java.util.List;
 
 public class Meta implements Comparable<Meta> {
 

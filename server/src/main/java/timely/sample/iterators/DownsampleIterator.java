@@ -1,29 +1,24 @@
 package timely.sample.iterators;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
-
 import org.apache.accumulo.core.client.IteratorSetting;
 import org.apache.accumulo.core.data.Key;
 import org.apache.accumulo.core.data.Value;
 import org.apache.accumulo.core.iterators.IteratorEnvironment;
 import org.apache.accumulo.core.iterators.SortedKeyValueIterator;
 import org.apache.accumulo.core.iterators.WrappingIterator;
-
 import timely.adapter.accumulo.MetricAdapter;
+import timely.api.response.TimelyException;
 import timely.model.Metric;
 import timely.model.Tag;
-import timely.api.response.TimelyException;
 import timely.sample.Aggregator;
 import timely.sample.Downsample;
 import timely.sample.DownsampleFactory;
+
+import java.io.*;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
 
 public class DownsampleIterator extends WrappingIterator {
 

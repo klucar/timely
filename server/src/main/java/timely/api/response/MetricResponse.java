@@ -1,15 +1,12 @@
 package timely.api.response;
 
-import java.util.List;
-import java.util.stream.Collectors;
-
 import org.apache.commons.lang3.builder.EqualsBuilder;
 import org.apache.commons.lang3.builder.HashCodeBuilder;
 import org.apache.commons.lang3.builder.ToStringBuilder;
-
-import timely.adapter.accumulo.MetricAdapter;
 import timely.model.Metric;
 import timely.model.Tag;
+
+import java.util.List;
 
 public class MetricResponse {
 

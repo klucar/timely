@@ -1,25 +1,22 @@
 package timely.api.request.timeseries;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.JsonNode;
 import io.netty.handler.codec.http.QueryStringDecoder;
-
-import java.util.ArrayList;
-import java.util.Collection;
-
 import org.apache.commons.lang3.builder.EqualsBuilder;
 import org.apache.commons.lang3.builder.HashCodeBuilder;
 import org.apache.commons.lang3.builder.ToStringBuilder;
-
 import timely.api.annotation.Http;
 import timely.api.annotation.WebSocket;
-import timely.model.Tag;
 import timely.api.request.AuthenticatedRequest;
 import timely.api.request.HttpGetRequest;
 import timely.api.request.HttpPostRequest;
 import timely.api.request.WebSocketRequest;
+import timely.model.Tag;
 import timely.util.JsonUtil;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.databind.JsonNode;
+import java.util.ArrayList;
+import java.util.Collection;
 
 @Http(path = "/api/search/lookup")
 @WebSocket(operation = "lookup")
@@ -107,7 +104,7 @@ public class SearchLookupRequest extends AuthenticatedRequest implements HttpGet
         JsonNode operation = root.findValue("operation");
         if (null == operation) {
             StringBuilder buf = new StringBuilder(content.length() + 10);
-            // TODO building JSON by hand? ugh
+            // TODO need to get rid of { in requests... use an object
             buf.append("{ \"operation\" : \"lookup\", ");
             int open = content.indexOf("{");
             buf.append(content.substring(open + 1));
@@ -123,7 +120,7 @@ public class SearchLookupRequest extends AuthenticatedRequest implements HttpGet
             throw new IllegalArgumentException("m parameter is required for lookup");
         }
         final String m = decoder.parameters().get("m").get(0);
-        // TODO are you parsing json yourself here? that's always a bad idea.
+        // TODO need to get rid of { in requests
         final int tagIdx = m.indexOf("{");
         if (-1 == tagIdx) {
             search.setQuery(m);

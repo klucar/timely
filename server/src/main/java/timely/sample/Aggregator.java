@@ -1,11 +1,6 @@
 package timely.sample;
 
-import timely.sample.aggregators.Avg;
-import timely.sample.aggregators.Count;
-import timely.sample.aggregators.Dev;
-import timely.sample.aggregators.Max;
-import timely.sample.aggregators.Min;
-import timely.sample.aggregators.Sum;
+import timely.sample.aggregators.*;
 
 public interface Aggregator {
 

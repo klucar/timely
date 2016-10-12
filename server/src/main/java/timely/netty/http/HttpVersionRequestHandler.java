@@ -8,11 +8,10 @@ import io.netty.handler.codec.http.FullHttpResponse;
 import io.netty.handler.codec.http.HttpHeaders.Names;
 import io.netty.handler.codec.http.HttpResponseStatus;
 import io.netty.handler.codec.http.HttpVersion;
-
-import java.nio.charset.StandardCharsets;
-
 import timely.api.request.VersionRequest;
 import timely.netty.Constants;
+
+import java.nio.charset.StandardCharsets;
 
 public class HttpVersionRequestHandler extends SimpleChannelInboundHandler<VersionRequest> implements TimelyHttpHandler {
 

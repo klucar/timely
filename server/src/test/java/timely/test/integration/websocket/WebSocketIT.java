@@ -395,10 +395,14 @@ public class WebSocketIT extends OneWaySSLBase {
 
             // Confirm receipt of all data sent to this point
             List<String> response = handler.getResponses();
+            int waitCount = 0;
             while (response.size() == 0 && handler.isConnected()) {
                 LOG.info("Waiting for web socket response");
                 sleepUninterruptibly(500, TimeUnit.MILLISECONDS);
                 response = handler.getResponses();
+                if (waitCount++ == 100) {
+                    assertTrue("Failed to receive websocket response", false);
+                }
             }
             Assert.assertEquals(1, response.size());
             Assert.assertEquals("{\"metrics\":[]}", response.get(0));

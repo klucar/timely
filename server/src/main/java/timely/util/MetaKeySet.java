@@ -1,15 +1,11 @@
 package timely.util;
 
-import java.io.Serializable;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.Iterator;
-import java.util.List;
-import java.util.TreeSet;
-
 import org.apache.accumulo.core.data.Key;
 import org.apache.accumulo.core.data.Mutation;
 import org.apache.accumulo.core.data.Value;
+
+import java.io.Serializable;
+import java.util.*;
 
 public class MetaKeySet extends TreeSet<Key> {
 

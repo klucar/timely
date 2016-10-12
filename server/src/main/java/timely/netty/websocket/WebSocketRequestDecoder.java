@@ -7,13 +7,9 @@ import io.netty.handler.codec.http.websocketx.TextWebSocketFrame;
 import io.netty.handler.codec.http.websocketx.WebSocketFrame;
 import io.netty.handler.timeout.IdleState;
 import io.netty.handler.timeout.IdleStateEvent;
-
-import java.util.List;
-
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import timely.Configuration;
 import timely.api.request.AuthenticatedRequest;
 import timely.api.request.WebSocketRequest;
@@ -21,6 +17,8 @@ import timely.api.response.TimelyException;
 import timely.cache.AuthCache;
 import timely.subscription.SubscriptionRegistry;
 import timely.util.JsonUtil;
+
+import java.util.List;
 
 public class WebSocketRequestDecoder extends MessageToMessageDecoder<WebSocketFrame> {
 

@@ -11,6 +11,7 @@ import timely.Server;
 import timely.adapter.accumulo.MetricWriter;
 import timely.adapter.accumulo.TableHelper;
 import timely.cache.AuthorizationsCache;
+import timely.cache.MetaCache;
 import timely.cache.VisibilityCache;
 import timely.guice.provider.ChannelClassProvider;
 import timely.guice.provider.ConnectorProvider;
@@ -18,7 +19,6 @@ import timely.guice.provider.EventLoopGroupProvider;
 import timely.guice.provider.ServerSocketChannelClassProvider;
 import timely.store.DataStore;
 import timely.store.DataStoreImpl;
-import timely.cache.MetaCache;
 import timely.validator.TimelyServer;
 
 /**

@@ -1,23 +1,16 @@
 package timely;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
-
-import javax.validation.Valid;
-import javax.validation.constraints.NotNull;
-
+import com.google.common.collect.Lists;
 import org.apache.accumulo.core.client.BatchWriterConfig;
 import org.hibernate.validator.constraints.NotBlank;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.NestedConfigurationProperty;
 import org.springframework.stereotype.Component;
-
 import timely.validator.NotEmptyIfFieldSet;
 
-import com.google.common.collect.Lists;
+import javax.validation.Valid;
+import javax.validation.constraints.NotNull;
+import java.util.*;
 
 @Component
 @ConfigurationProperties(prefix = "timely")

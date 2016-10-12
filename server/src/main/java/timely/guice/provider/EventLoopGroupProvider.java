@@ -6,7 +6,6 @@ import io.netty.channel.epoll.EpollEventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import timely.TimelyRunner;
 import timely.guice.EpollUtil;
 
 /**
@@ -21,23 +20,23 @@ public class EventLoopGroupProvider implements Provider<EventLoopGroup> {
     // perhaps the groups aren't being shut down in all the test cases
     // todo check event loop group shutdown in tests
     // then, I found this. https://github.com/netty/netty/issues/639
-    private static EventLoopGroup epollEventLoopGroup = null;
-    private static EventLoopGroup nioEventLoopGroup = null;
+    private EventLoopGroup epollEventLoopGroup = null;
+    private EventLoopGroup nioEventLoopGroup = null;
 
     @Override
     public final EventLoopGroup get() {
         if (EpollUtil.useEpoll()) {
-            // if( null == epollEventLoopGroup ){
-            // LOG.info("Creating EpollEventLoopGroup");
-            // epollEventLoopGroup = new EpollEventLoopGroup();
-            // }
-            return new EpollEventLoopGroup(); // epollEventLoopGroup;
+            if (null == epollEventLoopGroup) {
+                LOG.info("Creating EpollEventLoopGroup");
+                epollEventLoopGroup = new EpollEventLoopGroup();
+            }
+            return epollEventLoopGroup;
         } else {
-            // if( null == nioEventLoopGroup ){
-            // LOG.info("Creating NioEventLoopGroup");
-            // nioEventLoopGroup = new NioEventLoopGroup();
-            // }
-            return new NioEventLoopGroup();
+            if (null == nioEventLoopGroup) {
+                LOG.info("Creating NioEventLoopGroup");
+                nioEventLoopGroup = new NioEventLoopGroup();
+            }
+            return nioEventLoopGroup;
         }
     }
 

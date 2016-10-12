@@ -17,7 +17,6 @@ public class MetricsResponseTest {
     @Inject
     MetaCache metaCache;
 
-    @Inject
     MetricsResponse r;
 
     @Before
@@ -25,6 +24,8 @@ public class MetricsResponseTest {
         Configuration cfg = TestConfiguration.createMinimalConfigurationForTest();
         Injector injector = Guice.createInjector(new TestModule(cfg));
         injector.injectMembers(this);
+
+        r = new MetricsResponse(metaCache);
     }
 
     /*

@@ -3,15 +3,13 @@ package timely.netty.websocket.subscription;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.handler.codec.http.websocketx.CloseWebSocketFrame;
-
-import java.util.Map;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import timely.api.request.subscription.AddSubscription;
 import timely.subscription.Subscription;
 import timely.subscription.SubscriptionRegistry;
+
+import java.util.Map;
 
 public class WSAddSubscriptionRequestHandler extends SimpleChannelInboundHandler<AddSubscription> {
 

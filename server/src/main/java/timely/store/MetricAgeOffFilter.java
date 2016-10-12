@@ -1,10 +1,5 @@
 package timely.store;
 
-import static java.nio.charset.StandardCharsets.UTF_8;
-
-import java.io.IOException;
-import java.util.Map;
-
 import org.apache.accumulo.core.data.ByteSequence;
 import org.apache.accumulo.core.data.Key;
 import org.apache.accumulo.core.data.Value;
@@ -14,6 +9,11 @@ import org.apache.accumulo.core.iterators.SortedKeyValueIterator;
 import org.apache.commons.collections4.trie.PatriciaTrie;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.io.IOException;
+import java.util.Map;
+
+import static java.nio.charset.StandardCharsets.UTF_8;
 
 public class MetricAgeOffFilter extends Filter {
 

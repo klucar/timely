@@ -5,17 +5,20 @@ import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.handler.codec.http.HttpHeaders.Names;
 import timely.api.request.timeseries.MetricsRequest;
 import timely.api.response.timeseries.MetricsResponse;
+import timely.cache.MetaCache;
 import timely.netty.http.TimelyHttpHandler;
 
 public class HttpMetricsRequestHandler extends SimpleChannelInboundHandler<MetricsRequest> implements TimelyHttpHandler {
 
-    public HttpMetricsRequestHandler() {
+    MetaCache metaCache;
 
+    public HttpMetricsRequestHandler(MetaCache metaCache) {
+        this.metaCache = metaCache;
     }
 
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, MetricsRequest msg) throws Exception {
-        MetricsResponse r = new MetricsResponse();
+        MetricsResponse r = new MetricsResponse(metaCache);
         String acceptHeader = msg.getRequestHeaders().get(Names.ACCEPT);
         sendResponse(ctx, r.toHttpResponse(acceptHeader));
     }

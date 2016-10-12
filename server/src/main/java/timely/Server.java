@@ -5,6 +5,7 @@ import io.netty.bootstrap.Bootstrap;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.buffer.PooledByteBufAllocator;
 import io.netty.channel.*;
+import io.netty.channel.socket.DatagramChannel;
 import io.netty.channel.socket.ServerSocketChannel;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.handler.codec.DelimiterBasedFrameDecoder;
@@ -150,27 +151,34 @@ public class Server implements TimelyServer {
         groupFutures.add(tcpBossGroup.shutdownGracefully(quietPeriod, 10, TimeUnit.SECONDS));
 
         LOG.info("Shutting down tcpWorkerGroup");
-        groupFutures.add(tcpWorkerGroup.shutdownGracefully(quietPeriod, 10, TimeUnit.SECONDS));
+        // groupFutures.add(tcpWorkerGroup.shutdownGracefully(quietPeriod, 10,
+        // TimeUnit.SECONDS));
 
         LOG.info("Shutting down httpBossGroup");
-        groupFutures.add(httpBossGroup.shutdownGracefully(quietPeriod, 10, TimeUnit.SECONDS));
+        // groupFutures.add(httpBossGroup.shutdownGracefully(quietPeriod, 10,
+        // TimeUnit.SECONDS));
 
         LOG.info("Shutting down httpWorkerGroup");
-        groupFutures.add(httpWorkerGroup.shutdownGracefully(quietPeriod, 10, TimeUnit.SECONDS));
+        // groupFutures.add(httpWorkerGroup.shutdownGracefully(quietPeriod, 10,
+        // TimeUnit.SECONDS));
 
         LOG.info("Shutting down wsBossGroup");
-        groupFutures.add(wsBossGroup.shutdownGracefully(quietPeriod, 10, TimeUnit.SECONDS));
+        // groupFutures.add(wsBossGroup.shutdownGracefully(quietPeriod, 10,
+        // TimeUnit.SECONDS));
 
         LOG.info("Shutting down wsWorkerGroup");
-        groupFutures.add(wsWorkerGroup.shutdownGracefully(quietPeriod, 10, TimeUnit.SECONDS));
+        // groupFutures.add(wsWorkerGroup.shutdownGracefully(quietPeriod, 10,
+        // TimeUnit.SECONDS));
 
         LOG.info("Shutting down udpBossGroup");
-        groupFutures.add(udpBossGroup.shutdownGracefully(quietPeriod, 10, TimeUnit.SECONDS));
+        // groupFutures.add(udpBossGroup.shutdownGracefully(quietPeriod, 10,
+        // TimeUnit.SECONDS));
 
         LOG.info("Shutting down udpWorkerGroup");
-        groupFutures.add(udpWorkerGroup.shutdownGracefully(quietPeriod, 10, TimeUnit.SECONDS));
+        // groupFutures.add(udpWorkerGroup.shutdownGracefully(quietPeriod, 10,
+        // TimeUnit.SECONDS));
 
-        groupFutures.parallelStream().forEach(f -> {
+        groupFutures.forEach(f -> {
             try {
                 f.get();
             } catch (final Exception e) {
@@ -202,7 +210,8 @@ public class Server implements TimelyServer {
     public void setup() {
         AuthCache.setSessionMaxAge(config); // todo remove this old cache
 
-        // todo log other injection specifics?
+        // todo log other injection specifics i.e. log what was actually
+        // injected?
         // todo is setup method still needed?
         LOG.info("Using channel class {}", channelClass.getSimpleName());
     }
@@ -375,7 +384,7 @@ public class Server implements TimelyServer {
             ch.pipeline().addLast("login", new X509LoginRequestHandler(config));
             ch.pipeline().addLast("doLogin", new BasicAuthLoginRequestHandler(config));
             ch.pipeline().addLast("aggregators", new HttpAggregatorsRequestHandler());
-            ch.pipeline().addLast("metrics", new HttpMetricsRequestHandler());
+            ch.pipeline().addLast("metrics", new HttpMetricsRequestHandler(metaCache));
             ch.pipeline().addLast("query", new HttpQueryRequestHandler(dataStore));
             ch.pipeline().addLast("search", new HttpSearchLookupRequestHandler(dataStore));
             ch.pipeline().addLast("suggest", new HttpSuggestRequestHandler(dataStore));
@@ -389,10 +398,10 @@ public class Server implements TimelyServer {
         return new UdpChannelInitializer();
     }
 
-    private class UdpChannelInitializer extends ChannelInitializer<SocketChannel> {
+    private class UdpChannelInitializer extends ChannelInitializer<DatagramChannel> {
 
         @Override
-        protected void initChannel(SocketChannel ch) throws Exception {
+        protected void initChannel(DatagramChannel ch) throws Exception {
             ch.pipeline().addLast("logger", new LoggingHandler());
             ch.pipeline().addLast("packetDecoder", new UdpPacketToByteBuf());
             ch.pipeline().addLast("buffer", new MetricsBufferDecoder());
@@ -442,7 +451,7 @@ public class Server implements TimelyServer {
             ch.pipeline().addLast("ws-protocol", new WebSocketServerProtocolHandler(WS_PATH, null, true));
             ch.pipeline().addLast("wsDecoder", new WebSocketRequestDecoder(config));
             ch.pipeline().addLast("aggregators", new WSAggregatorsRequestHandler());
-            ch.pipeline().addLast("metrics", new WSMetricsRequestHandler());
+            ch.pipeline().addLast("metrics", new WSMetricsRequestHandler(metaCache));
             ch.pipeline().addLast("query", new WSQueryRequestHandler(dataStore));
             ch.pipeline().addLast("lookup", new WSSearchLookupRequestHandler(dataStore));
             ch.pipeline().addLast("suggest", new WSSuggestRequestHandler(dataStore));

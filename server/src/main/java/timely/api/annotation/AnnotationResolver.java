@@ -1,18 +1,12 @@
 package timely.api.annotation;
 
 import io.github.lukehutch.fastclasspathscanner.FastClasspathScanner;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import timely.api.request.*;
 
 import java.util.ArrayList;
 import java.util.List;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import timely.api.request.HttpGetRequest;
-import timely.api.request.HttpPostRequest;
-import timely.api.request.TcpRequest;
-import timely.api.request.UdpRequest;
-import timely.api.request.WebSocketRequest;
 
 public class AnnotationResolver {
 

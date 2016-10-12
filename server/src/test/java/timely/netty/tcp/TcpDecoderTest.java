@@ -9,6 +9,7 @@ import io.netty.buffer.Unpooled;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.apache.accumulo.core.security.ColumnVisibility;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
@@ -23,20 +24,17 @@ import timely.api.request.VersionRequest;
 import timely.cache.VisibilityCache;
 import timely.test.TestConfiguration;
 
+import static org.junit.Assert.assertTrue;
+
 public class TcpDecoderTest {
 
     private static final Long TEST_TIME = System.currentTimeMillis();
-
-    @Inject
-    VisibilityCache visibilityCache;
 
     @Before
     public void setup() {
         Configuration cfg = TestConfiguration.createMinimalConfigurationForTest();
         Injector injector = Guice.createInjector(new TestModule(cfg));
         injector.injectMembers(this);
-
-        visibilityCache.initialize(cfg);
     }
 
     @Test
@@ -57,10 +55,8 @@ public class TcpDecoderTest {
                 .tag(new Tag("tag2", "value2"))
                 .build();
         // @formatter:on
-        // TODO check parse(Key, Value) implementation for empty visibility
-        // expected.setVisibility(Metric.EMPTY_VISIBILITY);
-        Assert.assertTrue(expected.equals(m));
-        // Assert.assertEquals(expected, m);
+
+        assertTrue(expected.equals(m));
     }
 
     @Test
@@ -81,10 +77,7 @@ public class TcpDecoderTest {
                 .tag(MetricAdapter.VISIBILITY_TAG, "a&b")
                 .build();
         // @formatter:on
-        // TODO check
-        // ColumnVisibility cv = VisibilityCache.getColumnVisibility("a&b");
-        Assert.assertTrue(expected.equals(m));
-        // Assert.assertEquals(expected, m);
+        assertTrue(expected.equals(m));
     }
 
     @Test

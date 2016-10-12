@@ -7,10 +7,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import timely.Configuration;
 import timely.api.model.Meta;
+import timely.cache.MetaCache;
 import timely.guice.provider.ConnectorProvider;
 import timely.model.Metric;
 import timely.model.Tag;
-import timely.cache.MetaCache;
 import timely.util.MetaKeySet;
 
 import java.util.ArrayList;
@@ -31,10 +31,10 @@ public class MetricWriter {
     private static final Logger LOG = LoggerFactory.getLogger(MetricWriter.class);
 
     @Inject
-    private Configuration configuration;
+    Configuration configuration;
 
     @Inject
-    private ConnectorProvider connectorProvider;
+    ConnectorProvider connectorProvider;
 
     @Inject
     TableHelper tableHelper;
@@ -128,19 +128,7 @@ public class MetricWriter {
             }
         }
         if (!toCache.isEmpty()) {
-            final Set<Mutation> muts = new TreeSet<>((o1, o2) -> {
-                if (o1.equals(o2)) {
-                    return 0;
-                } else {
-                    if (o1.hashCode() < o2.hashCode()) {
-                        return -1;
-                    } else {
-                        return 1;
-                    }
-                }
-            });
             toCache.forEach(m -> mks.addAll(MetaAdapter.toKeys(m)));
-            muts.addAll(mks.toMutations());
             try {
                 getMetaWriter().addMutations(mks.toMutations());
                 metaCache.addAll(toCache);
@@ -150,32 +138,6 @@ public class MetricWriter {
             }
         }
         return mks.size();
-    }
-
-    public boolean writeMetaMutations(Set<Mutation> muts) {
-        try {
-            getMetaWriter().addMutations(muts);
-            return true;
-        } catch (MutationsRejectedException e) {
-            LOG.error("Unable to write to meta table", e);
-            try {
-                try {
-                    final BatchWriter w = metaWriter.get();
-                    metaWriter.remove();
-                    writers.remove(w);
-                    w.close();
-                } catch (MutationsRejectedException e1) {
-                    LOG.error("Error closing meta writer", e1);
-                }
-                final BatchWriter w = connectorProvider.get().createBatchWriter(metaTable, bwConfig);
-                metaWriter.set(w);
-                writers.add(w);
-            } catch (TableNotFoundException e1) {
-                LOG.error("Unexpected error recreating meta batch writer, shutting down Timely server: {}", e1);
-                throw new RuntimeException(e1);
-            }
-        }
-        return false;
     }
 
     private BatchWriter getMetaWriter() {

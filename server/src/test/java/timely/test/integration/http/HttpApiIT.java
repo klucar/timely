@@ -3,7 +3,6 @@ package timely.test.integration.http;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.select.Elements;
-import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
@@ -19,7 +18,6 @@ import timely.test.IntegrationTest;
 import timely.test.TestConfiguration;
 import timely.test.integration.OneWaySSLBase;
 import timely.util.JsonUtil;
-import timely.validator.TimelyServer;
 
 import javax.net.ssl.HttpsURLConnection;
 import java.io.OutputStream;
@@ -120,16 +118,20 @@ public class HttpApiIT extends OneWaySSLBase {
 
     @Test
     public void testLookup() throws Exception {
-        put("sys.cpu.user " + TEST_TIME + " 1.0 tag1=value1 tag2=value2", "sys.cpu.user " + (TEST_TIME + 1)
-                + " 1.0 tag3=value3", "sys.cpu.idle " + (TEST_TIME + 1) + " 1.0 tag3=value3 tag4=value4",
-                "sys.cpu.idle " + (TEST_TIME + 2) + " 1.0 tag3=value3 tag4=value4");
+        // @formatter:off
+        put("sys.cpu.user " + TEST_TIME + " 1.0 tag1=value1 tag2=value2",
+            "sys.cpu.user " + (TEST_TIME + 1) + " 1.0 tag3=value3",
+            "sys.cpu.idle " + (TEST_TIME + 1) + " 1.0 tag3=value3 tag4=value4",
+            "sys.cpu.idle " + (TEST_TIME + 2) + " 1.0 tag3=value3 tag4=value4");
+        // @formatter:on
+
         // Latency in TestConfiguration is 2s, wait for it
         sleepUninterruptibly(TestConfiguration.WAIT_SECONDS, TimeUnit.SECONDS);
 
         String suggest = "https://localhost:54322/api/search/lookup?";
 
         // Test a known query
-        String result = query(suggest + "m=sys.cpu.idle%7Btag3%3D.*%7D");
+        String result = query(suggest + "m=sys.cpu.idle%7Btag3%3D.*%7D"); // m=sys.cpu.idle{tag3=.*}
         assertTrue(result, result.indexOf("\"results\":[{\"tags\":{\"tag3\":\"value3\"}") >= 0);
 
         // Test a fail

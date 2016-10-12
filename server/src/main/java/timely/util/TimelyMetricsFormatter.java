@@ -1,8 +1,5 @@
 package timely.util;
 
-import java.nio.ByteBuffer;
-import java.util.Map.Entry;
-
 import org.apache.accumulo.core.client.lexicoder.LongLexicoder;
 import org.apache.accumulo.core.client.lexicoder.PairLexicoder;
 import org.apache.accumulo.core.client.lexicoder.StringLexicoder;
@@ -10,6 +7,9 @@ import org.apache.accumulo.core.data.Key;
 import org.apache.accumulo.core.data.Value;
 import org.apache.accumulo.core.util.ComparablePair;
 import org.apache.accumulo.core.util.format.DefaultFormatter;
+
+import java.nio.ByteBuffer;
+import java.util.Map.Entry;
 
 public class TimelyMetricsFormatter extends DefaultFormatter {
 

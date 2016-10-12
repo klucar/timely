@@ -1,15 +1,9 @@
 package timely.subscription;
 
-import static com.google.common.util.concurrent.Uninterruptibles.sleepUninterruptibly;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.http.websocketx.TextWebSocketFrame;
-
-import java.lang.Thread.UncaughtExceptionHandler;
-import java.util.Iterator;
-import java.util.Map;
-import java.util.Map.Entry;
-import java.util.concurrent.TimeUnit;
-
 import org.apache.accumulo.core.client.Scanner;
 import org.apache.accumulo.core.data.Key;
 import org.apache.accumulo.core.data.Range;
@@ -18,16 +12,20 @@ import org.apache.commons.lang3.builder.ToStringBuilder;
 import org.apache.hadoop.io.Text;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import timely.adapter.accumulo.MetricAdapter;
 import timely.api.response.MetricResponse;
-import timely.model.Metric;
 import timely.api.response.TimelyException;
+import timely.model.Metric;
 import timely.store.DataStore;
 import timely.util.JsonUtil;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import java.lang.Thread.UncaughtExceptionHandler;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.concurrent.TimeUnit;
+
+import static com.google.common.util.concurrent.Uninterruptibles.sleepUninterruptibly;
 
 public class MetricScanner extends Thread implements UncaughtExceptionHandler {
 
