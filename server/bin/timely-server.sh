@@ -40,6 +40,6 @@ JVM_ARGS="-Xmx256m -Xms256m -Dio.netty.eventLoopThreads=${NUM_SERVER_THREADS} -D
 JVM_ARGS="${JVM_ARGS} -DLog4jContextSelector=org.apache.logging.log4j.core.async.AsyncLoggerContextSelector"
 JVM_ARGS="${JVM_ARGS} -Djava.library.path=${NATIVE_DIR}/libnetty-${TCNATIVE_SUFFIX}"
 
-echo "$JAVA_HOME/bin/java ${JVM_ARGS} timely.Server --spring.config.name=timely"
-$JAVA_HOME/bin/java ${JVM_ARGS} timely.Server --spring.config.name=timely
+echo "$JAVA_HOME/bin/java ${JVM_ARGS} timely.TimelyRunner --spring.config.name=timely"
+$JAVA_HOME/bin/java ${JVM_ARGS} timely.TimelyRunner --spring.config.name=timely
 

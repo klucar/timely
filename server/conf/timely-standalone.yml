@@ -5,6 +5,7 @@ timely:
     default: 7
   metrics-report-ignored-tags:
   accumulo:
+    standalone: true
     instance-name: TimelyStandalone
     zookeepers: 127.0.0.1:9804
     username: root

@@ -5,6 +5,7 @@ timely:
     default: 7
   metrics-report-ignored-tags:
   accumulo:
+    standalone: false
     instance-name:
     zookeepers:
     username:
