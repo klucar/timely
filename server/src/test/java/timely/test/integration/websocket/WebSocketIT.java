@@ -201,7 +201,7 @@ public class WebSocketIT extends OneWaySSLBase {
         while (!handshaker.isHandshakeComplete()) {
             sleepUninterruptibly(500, TimeUnit.MILLISECONDS);
             LOG.debug("Waiting for Handshake to complete");
-            if( sleepCount++ == 100){
+            if (sleepCount++ == 100) {
                 fail("timeout waiting for websocket response");
             }
 
@@ -238,7 +238,7 @@ public class WebSocketIT extends OneWaySSLBase {
                 LOG.info("Waiting for web socket response");
                 sleepUninterruptibly(500, TimeUnit.MILLISECONDS);
                 response = handler.getResponses();
-                if( sleepCount++ == 100){
+                if (sleepCount++ == 100) {
                     fail("timeout waiting for websocket response");
                 }
             }
@@ -288,7 +288,7 @@ public class WebSocketIT extends OneWaySSLBase {
                 LOG.info("Waiting for web socket response");
                 sleepUninterruptibly(500, TimeUnit.MILLISECONDS);
                 response = handler.getResponses();
-                if( sleepCount++ == 100){
+                if (sleepCount++ == 100) {
                     fail("timeout waiting for websocket response");
                 }
             }
@@ -318,7 +318,7 @@ public class WebSocketIT extends OneWaySSLBase {
                 LOG.info("Waiting for web socket response");
                 sleepUninterruptibly(500, TimeUnit.MILLISECONDS);
                 response = handler.getResponses();
-                if( sleepCount++ == 100){
+                if (sleepCount++ == 100) {
                     fail("timeout waiting for websocket response");
                 }
             }
@@ -351,7 +351,7 @@ public class WebSocketIT extends OneWaySSLBase {
                 LOG.info("Waiting for web socket response");
                 sleepUninterruptibly(500, TimeUnit.MILLISECONDS);
                 response = handler.getResponses();
-                if( sleepCount++ == 100){
+                if (sleepCount++ == 100) {
                     fail("timeout waiting for websocket response");
                 }
             }
@@ -406,7 +406,7 @@ public class WebSocketIT extends OneWaySSLBase {
                 LOG.info("Waiting for web socket response");
                 sleepUninterruptibly(500, TimeUnit.MILLISECONDS);
                 response = handler.getResponses();
-                if( sleepCount++ == 100){
+                if (sleepCount++ == 100) {
                     fail("timeout waiting for websocket response");
                 }
             }
@@ -431,7 +431,7 @@ public class WebSocketIT extends OneWaySSLBase {
                 LOG.info("Waiting for web socket response");
                 sleepUninterruptibly(500, TimeUnit.MILLISECONDS);
                 response = handler.getResponses();
-                if( sleepCount++ == 100){
+                if (sleepCount++ == 100) {
                     fail("timeout waiting for websocket response");
                 }
             }
@@ -482,7 +482,7 @@ public class WebSocketIT extends OneWaySSLBase {
                 LOG.info("Waiting for web socket response");
                 sleepUninterruptibly(500, TimeUnit.MILLISECONDS);
                 response = handler.getResponses();
-                if( sleepCount++ == 100){
+                if (sleepCount++ == 100) {
                     fail("timeout waiting for websocket response");
                 }
             }
@@ -534,7 +534,7 @@ public class WebSocketIT extends OneWaySSLBase {
                 LOG.info("Waiting for web socket response");
                 sleepUninterruptibly(500, TimeUnit.MILLISECONDS);
                 response = handler.getResponses();
-                if( sleepCount++ == 100){
+                if (sleepCount++ == 100) {
                     fail("timeout waiting for websocket response");
                 }
             }
@@ -578,7 +578,7 @@ public class WebSocketIT extends OneWaySSLBase {
                 LOG.info("Waiting for web socket response");
                 sleepUninterruptibly(500, TimeUnit.MILLISECONDS);
                 response = handler.getResponses();
-                if( sleepCount++ == 100){
+                if (sleepCount++ == 100) {
                     fail("timeout waiting for websocket response");
                 }
             }
@@ -618,7 +618,7 @@ public class WebSocketIT extends OneWaySSLBase {
                 LOG.info("Waiting for web socket response");
                 sleepUninterruptibly(500, TimeUnit.MILLISECONDS);
                 response = handler.getResponses();
-                if( sleepCount++ == 100){
+                if (sleepCount++ == 100) {
                     fail("timeout waiting for websocket response");
                 }
             }

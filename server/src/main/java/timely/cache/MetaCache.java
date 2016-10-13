@@ -38,7 +38,7 @@ public class MetaCache extends AbstractCache<String, Meta> {
         LOG.info("MetaCache initialized.");
     }
 
-    public void add(Meta m){
+    public void add(Meta m) {
         this.add(m.toString(), m);
     }
 
