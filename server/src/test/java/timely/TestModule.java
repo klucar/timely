@@ -14,7 +14,7 @@ public class TestModule extends TimelyModule {
 
     @Override
     protected void bindServer() {
-        bind(TimelyServer.class).toInstance(new StandaloneServer());
+        super.bindServer();
         bind(TestServer.class).toInstance(new TestServer());
     }
 

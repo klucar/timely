@@ -8,6 +8,7 @@ import io.netty.channel.socket.ServerSocketChannel;
 import org.apache.accumulo.core.client.Connector;
 import timely.Configuration;
 import timely.Server;
+import timely.StandaloneServer;
 import timely.adapter.accumulo.MetricWriter;
 import timely.adapter.accumulo.TableHelper;
 import timely.cache.AuthenticationCache;
@@ -63,7 +64,11 @@ public class TimelyModule extends AbstractModule {
     }
 
     protected void bindServer() {
-        bind(TimelyServer.class).toInstance(new Server());
+        if (configuration.getAccumulo().isStandalone()) {
+            bind(TimelyServer.class).toInstance(new StandaloneServer());
+        } else {
+            bind(TimelyServer.class).toInstance(new Server());
+        }
     }
 
     protected void bindCaches() {
