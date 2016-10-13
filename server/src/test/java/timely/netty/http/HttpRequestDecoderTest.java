@@ -1,5 +1,8 @@
 package timely.netty.http;
 
+import com.google.inject.Guice;
+import com.google.inject.Inject;
+import com.google.inject.Injector;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.http.DefaultFullHttpRequest;
 import io.netty.handler.codec.http.FullHttpRequest;
@@ -24,7 +27,9 @@ import org.junit.Test;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 
 import timely.Configuration;
+import timely.TestModule;
 import timely.api.request.MetricRequest;
+import timely.cache.AuthenticationCache;
 import timely.model.Metric;
 import timely.model.Tag;
 import timely.api.request.timeseries.AggregatorsRequest;
@@ -35,7 +40,6 @@ import timely.api.request.timeseries.QueryRequest.Filter;
 import timely.api.request.timeseries.QueryRequest.RateOption;
 import timely.api.request.timeseries.QueryRequest.SubQuery;
 import timely.api.request.VersionRequest;
-import timely.cache.AuthCache;
 import timely.netty.Constants;
 import timely.test.TestConfiguration;
 import timely.util.JsonUtil;
@@ -46,8 +50,8 @@ public class HttpRequestDecoderTest {
 
     public static class TestHttpQueryDecoder extends HttpRequestDecoder {
 
-        public TestHttpQueryDecoder(Configuration config) {
-            super(config);
+        public TestHttpQueryDecoder(Configuration config, AuthenticationCache authenticationCache) {
+            super(config, authenticationCache);
         }
 
         @Override
@@ -65,23 +69,33 @@ public class HttpRequestDecoderTest {
     private List<Object> results = new ArrayList<>();
     private static String cookie = null;
 
+    @Inject
+    AuthenticationCache authenticationCache;
+
     @BeforeClass
     public static void before() throws Exception {
         config = TestConfiguration.createMinimalConfigurationForTest();
         anonConfig = TestConfiguration.createMinimalConfigurationForTest();
         anonConfig.getSecurity().setAllowAnonymousAccess(true);
         cookie = URLEncoder.encode(UUID.randomUUID().toString(), StandardCharsets.UTF_8.name());
-        AuthCache.setSessionMaxAge(config);
-        AuthCache.getCache().put(cookie, new UsernamePasswordAuthenticationToken("test", "test1"));
+
+        // AuthCache.setSessionMaxAge(config);
+        // AuthCache.getCache().put(cookie, new
+        // UsernamePasswordAuthenticationToken("test", "test1"));
     }
 
     @AfterClass
     public static void after() {
-        AuthCache.resetSessionMaxAge();
+        // AuthCache.resetSessionMaxAge();
     }
 
     @Before
     public void setup() throws Exception {
+        Injector injector = Guice.createInjector(new TestModule(config));
+        injector.injectMembers(this);
+
+        authenticationCache.add(cookie, new UsernamePasswordAuthenticationToken("test", "test1"));
+
         results.clear();
     }
 
@@ -91,7 +105,7 @@ public class HttpRequestDecoderTest {
 
     @Test
     public void testUnknownURI() throws Exception {
-        decoder = new TestHttpQueryDecoder(config);
+        decoder = new TestHttpQueryDecoder(config, authenticationCache);
         DefaultFullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET,
                 "/api/unknown");
         decoder.decode(null, request, results);
@@ -101,7 +115,7 @@ public class HttpRequestDecoderTest {
 
     @Test(expected = IllegalArgumentException.class)
     public void testAggregatorsURINoSession() throws Exception {
-        decoder = new TestHttpQueryDecoder(config);
+        decoder = new TestHttpQueryDecoder(config, authenticationCache);
         DefaultFullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET,
                 "/api/aggregators");
         decoder.decode(null, request, results);
@@ -111,7 +125,7 @@ public class HttpRequestDecoderTest {
 
     @Test
     public void testAggregatorsURIWithAnonAccess() throws Exception {
-        decoder = new TestHttpQueryDecoder(anonConfig);
+        decoder = new TestHttpQueryDecoder(anonConfig, authenticationCache);
         DefaultFullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET,
                 "/api/aggregators");
         decoder.decode(null, request, results);
@@ -121,7 +135,7 @@ public class HttpRequestDecoderTest {
 
     @Test
     public void testAggregatorsURI() throws Exception {
-        decoder = new TestHttpQueryDecoder(config);
+        decoder = new TestHttpQueryDecoder(config, authenticationCache);
         DefaultFullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET,
                 "/api/aggregators");
         addCookie(request);
@@ -132,7 +146,7 @@ public class HttpRequestDecoderTest {
 
     @Test(expected = IllegalArgumentException.class)
     public void testAggregatorsPostNoSession() throws Exception {
-        decoder = new TestHttpQueryDecoder(config);
+        decoder = new TestHttpQueryDecoder(config, authenticationCache);
         DefaultFullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST,
                 "/api/aggregators");
         decoder.decode(null, request, results);
@@ -140,7 +154,7 @@ public class HttpRequestDecoderTest {
 
     @Test
     public void testAggregatorsPostAnonAccess() throws Exception {
-        decoder = new TestHttpQueryDecoder(anonConfig);
+        decoder = new TestHttpQueryDecoder(anonConfig, authenticationCache);
         DefaultFullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST,
                 "/api/aggregators");
         decoder.decode(null, request, results);
@@ -150,7 +164,7 @@ public class HttpRequestDecoderTest {
 
     @Test
     public void testAggregatorsPost() throws Exception {
-        decoder = new TestHttpQueryDecoder(anonConfig);
+        decoder = new TestHttpQueryDecoder(anonConfig, authenticationCache);
         DefaultFullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST,
                 "/api/aggregators");
         addCookie(request);
@@ -161,7 +175,7 @@ public class HttpRequestDecoderTest {
 
     @Test(expected = IllegalArgumentException.class)
     public void testLookupURIWithNoArgs() throws Exception {
-        decoder = new TestHttpQueryDecoder(anonConfig);
+        decoder = new TestHttpQueryDecoder(anonConfig, authenticationCache);
         DefaultFullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET,
                 "/api/search/lookup");
         decoder.decode(null, request, results);
@@ -169,7 +183,7 @@ public class HttpRequestDecoderTest {
 
     @Test(expected = IllegalArgumentException.class)
     public void testLookupURIWithNoSession() throws Exception {
-        decoder = new TestHttpQueryDecoder(config);
+        decoder = new TestHttpQueryDecoder(config, authenticationCache);
         DefaultFullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET,
                 "/api/search/lookup");
         decoder.decode(null, request, results);
@@ -177,7 +191,7 @@ public class HttpRequestDecoderTest {
 
     @Test(expected = IllegalArgumentException.class)
     public void testLookupURIWithWithSession() throws Exception {
-        decoder = new TestHttpQueryDecoder(config);
+        decoder = new TestHttpQueryDecoder(config, authenticationCache);
         DefaultFullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET,
                 "/api/search/lookup");
         addCookie(request);
@@ -186,7 +200,7 @@ public class HttpRequestDecoderTest {
 
     @Test(expected = JsonMappingException.class)
     public void testLookupPostWithNoArgs() throws Exception {
-        decoder = new TestHttpQueryDecoder(config);
+        decoder = new TestHttpQueryDecoder(config, authenticationCache);
         DefaultFullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST,
                 "/api/search/lookup");
         addCookie(request);
@@ -195,7 +209,7 @@ public class HttpRequestDecoderTest {
 
     @Test(expected = JsonMappingException.class)
     public void testLookupPostWithNoSession() throws Exception {
-        decoder = new TestHttpQueryDecoder(config);
+        decoder = new TestHttpQueryDecoder(config, authenticationCache);
         DefaultFullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST,
                 "/api/search/lookup");
         decoder.decode(null, request, results);
@@ -203,7 +217,7 @@ public class HttpRequestDecoderTest {
 
     @Test
     public void testLookupURIWithNoLimit() throws Exception {
-        decoder = new TestHttpQueryDecoder(config);
+        decoder = new TestHttpQueryDecoder(config, authenticationCache);
         DefaultFullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET,
                 "/api/search/lookup?m=sys.cpu.user");
         addCookie(request);
@@ -224,7 +238,7 @@ public class HttpRequestDecoderTest {
         "    \"metric\": \"sys.cpu.user\"\n" + 
         "}";
         // @formatter:on
-        decoder = new TestHttpQueryDecoder(config);
+        decoder = new TestHttpQueryDecoder(config, authenticationCache);
         DefaultFullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST,
                 "/api/search/lookup");
         request.content().writeBytes(content.getBytes());
@@ -240,7 +254,7 @@ public class HttpRequestDecoderTest {
 
     @Test
     public void testLookupURIWithLimit() throws Exception {
-        decoder = new TestHttpQueryDecoder(config);
+        decoder = new TestHttpQueryDecoder(config, authenticationCache);
         DefaultFullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET,
                 "/api/search/lookup?m=sys.cpu.user&limit=3000");
         addCookie(request);
@@ -262,7 +276,7 @@ public class HttpRequestDecoderTest {
         "    \"limit\": 3000\n" +
         "}";
         // @formatter:on
-        decoder = new TestHttpQueryDecoder(config);
+        decoder = new TestHttpQueryDecoder(config, authenticationCache);
         DefaultFullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST,
                 "/api/search/lookup");
         request.content().writeBytes(content.getBytes());
@@ -278,7 +292,7 @@ public class HttpRequestDecoderTest {
 
     @Test
     public void testLookupURIWithLimitAndTags() throws Exception {
-        decoder = new TestHttpQueryDecoder(config);
+        decoder = new TestHttpQueryDecoder(config, authenticationCache);
         DefaultFullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET,
                 "/api/search/lookup?m=sys.cpu.user{host=*}&limit=3000");
         addCookie(request);
@@ -308,7 +322,7 @@ public class HttpRequestDecoderTest {
         "    ]\n" +
         "}";
         // @formatter:on
-        decoder = new TestHttpQueryDecoder(config);
+        decoder = new TestHttpQueryDecoder(config, authenticationCache);
         DefaultFullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST,
                 "/api/search/lookup");
         request.content().writeBytes(content.getBytes());
@@ -327,7 +341,7 @@ public class HttpRequestDecoderTest {
 
     @Test(expected = IllegalArgumentException.class)
     public void testSuggestNoSession() throws Exception {
-        decoder = new TestHttpQueryDecoder(config);
+        decoder = new TestHttpQueryDecoder(config, authenticationCache);
         DefaultFullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET,
                 "/api/suggest?type=foo");
         decoder.decode(null, request, results);
@@ -335,7 +349,7 @@ public class HttpRequestDecoderTest {
 
     @Test(expected = IllegalArgumentException.class)
     public void testSuggestURIWithInvalidTypeAnonAccess() throws Exception {
-        decoder = new TestHttpQueryDecoder(anonConfig);
+        decoder = new TestHttpQueryDecoder(anonConfig, authenticationCache);
         DefaultFullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET,
                 "/api/suggest?type=foo");
         decoder.decode(null, request, results);
@@ -349,7 +363,7 @@ public class HttpRequestDecoderTest {
 
     @Test(expected = IllegalArgumentException.class)
     public void testSuggestURIWithInvalidType() throws Exception {
-        decoder = new TestHttpQueryDecoder(config);
+        decoder = new TestHttpQueryDecoder(config, authenticationCache);
         DefaultFullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET,
                 "/api/suggest?type=foo");
         addCookie(request);
@@ -364,7 +378,7 @@ public class HttpRequestDecoderTest {
 
     @Test(expected = IllegalArgumentException.class)
     public void testSuggestURIValidateWithInvalidTypeFails() throws Exception {
-        decoder = new TestHttpQueryDecoder(config);
+        decoder = new TestHttpQueryDecoder(config, authenticationCache);
         DefaultFullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET,
                 "/api/suggest?type=foo");
         addCookie(request);
@@ -380,7 +394,7 @@ public class HttpRequestDecoderTest {
 
     @Test(expected = IllegalArgumentException.class)
     public void testSuggestURIWithValidTypeNoSession() throws Exception {
-        decoder = new TestHttpQueryDecoder(config);
+        decoder = new TestHttpQueryDecoder(config, authenticationCache);
         DefaultFullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET,
                 "/api/suggest?type=metrics");
         decoder.decode(null, request, results);
@@ -395,7 +409,7 @@ public class HttpRequestDecoderTest {
 
     @Test
     public void testSuggestURIWithValidType() throws Exception {
-        decoder = new TestHttpQueryDecoder(config);
+        decoder = new TestHttpQueryDecoder(config, authenticationCache);
         DefaultFullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET,
                 "/api/suggest?type=metrics");
         addCookie(request);
@@ -417,7 +431,7 @@ public class HttpRequestDecoderTest {
         "    \"type\": \"metrics\"\n" +
         "}";
         // @formatter:on
-        decoder = new TestHttpQueryDecoder(config);
+        decoder = new TestHttpQueryDecoder(config, authenticationCache);
         DefaultFullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST,
                 "/api/suggest");
         request.content().writeBytes(content.getBytes());
@@ -434,7 +448,7 @@ public class HttpRequestDecoderTest {
 
     @Test
     public void testSuggestWithValidTypeAndQuery() throws Exception {
-        decoder = new TestHttpQueryDecoder(config);
+        decoder = new TestHttpQueryDecoder(config, authenticationCache);
         DefaultFullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET,
                 "/api/suggest?type=metrics&q=sys.cpu.user");
         addCookie(request);
@@ -457,7 +471,7 @@ public class HttpRequestDecoderTest {
         "    \"q\": \"sys.cpu.user\"\n" +
         "}";
         // @formatter:on
-        decoder = new TestHttpQueryDecoder(config);
+        decoder = new TestHttpQueryDecoder(config, authenticationCache);
         DefaultFullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST,
                 "/api/suggest");
         request.content().writeBytes(content.getBytes());
@@ -474,7 +488,7 @@ public class HttpRequestDecoderTest {
 
     @Test
     public void testSuggestWithValidTypeAndQueryAndMax() throws Exception {
-        decoder = new TestHttpQueryDecoder(config);
+        decoder = new TestHttpQueryDecoder(config, authenticationCache);
         DefaultFullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET,
                 "/api/suggest?type=metrics&q=sys.cpu.user&max=30");
         addCookie(request);
@@ -498,7 +512,7 @@ public class HttpRequestDecoderTest {
         "    \"max\": 30\n" +
         "}";
         // @formatter:on
-        decoder = new TestHttpQueryDecoder(config);
+        decoder = new TestHttpQueryDecoder(config, authenticationCache);
         DefaultFullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST,
                 "/api/suggest");
         request.content().writeBytes(content.getBytes());
@@ -515,7 +529,7 @@ public class HttpRequestDecoderTest {
 
     @Test(expected = IllegalArgumentException.class)
     public void testQueryWithNoSession() throws Exception {
-        decoder = new TestHttpQueryDecoder(config);
+        decoder = new TestHttpQueryDecoder(config, authenticationCache);
         DefaultFullHttpRequest request = new DefaultFullHttpRequest(
                 HttpVersion.HTTP_1_1,
                 HttpMethod.GET,
@@ -525,7 +539,7 @@ public class HttpRequestDecoderTest {
 
     @Test
     public void testQueryURIAllAnonAccess() throws Exception {
-        decoder = new TestHttpQueryDecoder(anonConfig);
+        decoder = new TestHttpQueryDecoder(anonConfig, authenticationCache);
         DefaultFullHttpRequest request = new DefaultFullHttpRequest(
                 HttpVersion.HTTP_1_1,
                 HttpMethod.GET,
@@ -573,7 +587,7 @@ public class HttpRequestDecoderTest {
 
     @Test
     public void testQueryURIAllWithSession() throws Exception {
-        decoder = new TestHttpQueryDecoder(config);
+        decoder = new TestHttpQueryDecoder(config, authenticationCache);
         DefaultFullHttpRequest request = new DefaultFullHttpRequest(
                 HttpVersion.HTTP_1_1,
                 HttpMethod.GET,
@@ -639,7 +653,7 @@ public class HttpRequestDecoderTest {
                         "    ]\n"+
                         "}";
         // @formatter:on
-        decoder = new TestHttpQueryDecoder(config);
+        decoder = new TestHttpQueryDecoder(config, authenticationCache);
         DefaultFullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/api/query");
         request.content().writeBytes(content.getBytes());
         addCookie(request);
@@ -711,7 +725,7 @@ public class HttpRequestDecoderTest {
         "    ]\n"+
         "}";
         // @formatter:on
-        decoder = new TestHttpQueryDecoder(config);
+        decoder = new TestHttpQueryDecoder(config, authenticationCache);
         DefaultFullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/api/query");
         request.content().writeBytes(content.getBytes());
         addCookie(request);
@@ -783,7 +797,7 @@ public class HttpRequestDecoderTest {
         + "\"showQuery\":true"
         + "}";
         // @formatter:on
-        decoder = new TestHttpQueryDecoder(config);
+        decoder = new TestHttpQueryDecoder(config, authenticationCache);
         DefaultFullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/api/query");
         request.content().writeBytes(content.getBytes());
         addCookie(request);
@@ -822,7 +836,7 @@ public class HttpRequestDecoderTest {
         +  "]"
         + "}";
         // @formatter:on
-        decoder = new TestHttpQueryDecoder(config);
+        decoder = new TestHttpQueryDecoder(config, authenticationCache);
         DefaultFullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/api/query");
         request.content().writeBytes(content.getBytes());
         addCookie(request);
@@ -845,7 +859,7 @@ public class HttpRequestDecoderTest {
 
     @Test
     public void testVersionGet() throws Exception {
-        decoder = new TestHttpQueryDecoder(config);
+        decoder = new TestHttpQueryDecoder(config, authenticationCache);
         DefaultFullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/version");
         decoder.decode(null, request, results);
         Assert.assertEquals(1, results.size());
@@ -854,7 +868,7 @@ public class HttpRequestDecoderTest {
 
     @Test
     public void testVersionPost() throws Exception {
-        decoder = new TestHttpQueryDecoder(config);
+        decoder = new TestHttpQueryDecoder(config, authenticationCache);
         DefaultFullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/version");
         decoder.decode(null, request, results);
         Assert.assertEquals(1, results.size());
@@ -872,7 +886,7 @@ public class HttpRequestDecoderTest {
                 .build();
         // @formatter:on
         byte[] buf = JsonUtil.getObjectMapper().writeValueAsBytes(m);
-        decoder = new TestHttpQueryDecoder(config);
+        decoder = new TestHttpQueryDecoder(config, authenticationCache);
         DefaultFullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/api/put");
         request.content().writeBytes(buf);
         decoder.decode(null, request, results);

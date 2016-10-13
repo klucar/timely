@@ -13,6 +13,7 @@ import io.netty.handler.logging.LoggingHandler;
 import io.netty.handler.ssl.SslContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import timely.cache.AuthenticationCache;
 import timely.netty.tcp.MetricsBufferDecoder;
 import timely.netty.tcp.TcpDecoder;
 import timely.netty.tcp.TcpPutHandler;
@@ -29,7 +30,7 @@ public class TestServer extends Server {
     private final TestCaptureRequestHandler httpRequests = new TestCaptureRequestHandler();
     private final TestCaptureRequestHandler udpRequests = new TestCaptureRequestHandler();
 
-    private static StandaloneServer standaloneServer;
+    // private static StandaloneServer standaloneServer;
 
     public TestServer() {
         super();
@@ -43,11 +44,11 @@ public class TestServer extends Server {
     @Override
     public void setup() {
         super.setup();
-        standaloneServer.startMiniAccumulo(config);
+        StandaloneServer.startMiniAccumulo(config);
     }
 
     @Override
-    protected ChannelHandler setupHttpChannel(SslContext sslCtx) {
+    protected ChannelHandler setupHttpChannel(SslContext sslCtx, AuthenticationCache authenticationCache) {
         return new ChannelInitializer<SocketChannel>() {
 
             @Override
@@ -57,7 +58,8 @@ public class TestServer extends Server {
                 ch.pipeline().addLast("decompressor", new HttpContentDecompressor());
                 ch.pipeline().addLast("decoder", new HttpRequestDecoder());
                 ch.pipeline().addLast("aggregator", new HttpObjectAggregator(8192));
-                ch.pipeline().addLast("queryDecoder", new timely.netty.http.HttpRequestDecoder(config));
+                ch.pipeline().addLast("queryDecoder",
+                        new timely.netty.http.HttpRequestDecoder(config, authenticationCache));
                 ch.pipeline().addLast("capture", httpRequests);
             }
         };

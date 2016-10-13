@@ -2,7 +2,6 @@ package timely.adapter.accumulo;
 
 import com.google.inject.Inject;
 import org.apache.accumulo.core.client.*;
-import org.apache.accumulo.core.data.Mutation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import timely.Configuration;
@@ -15,8 +14,6 @@ import timely.util.MetaKeySet;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
-import java.util.TreeSet;
 import java.util.concurrent.TimeUnit;
 
 import static org.apache.accumulo.core.conf.AccumuloConfiguration.getMemoryInBytes;
@@ -123,7 +120,7 @@ public class MetricWriter {
         MetaKeySet mks = new MetaKeySet();
         for (final Tag tag : metric.getTags()) {
             Meta key = new Meta(metric.getName(), tag.getKey(), tag.getValue());
-            if (!metaCache.contains(key)) {
+            if (!metaCache.contains(key.toString())) {
                 toCache.add(key);
             }
         }

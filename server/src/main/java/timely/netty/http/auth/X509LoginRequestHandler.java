@@ -7,13 +7,14 @@ import org.springframework.security.web.authentication.preauth.PreAuthenticatedA
 import timely.Configuration;
 import timely.api.request.auth.X509LoginRequest;
 import timely.auth.AuthenticationService;
+import timely.cache.AuthenticationCache;
 
 import java.security.cert.X509Certificate;
 
 public class X509LoginRequestHandler extends TimelyLoginRequestHandler<X509LoginRequest> {
 
-    public X509LoginRequestHandler(Configuration conf) {
-        super(conf);
+    public X509LoginRequestHandler(Configuration conf, AuthenticationCache authCache) {
+        super(conf, authCache);
     }
 
     @Override

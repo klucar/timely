@@ -31,6 +31,7 @@ import timely.api.response.timeseries.SearchLookupResponse;
 import timely.api.response.timeseries.SearchLookupResponse.Result;
 import timely.api.response.timeseries.SuggestResponse;
 import timely.cache.AuthCache;
+import timely.cache.AuthenticationCache;
 import timely.cache.MetaCache;
 import timely.guice.provider.ConnectorProvider;
 import timely.model.Metric;
@@ -72,7 +73,7 @@ public class DataStoreImpl implements DataStore {
     MetaCache metaCache;
 
     @Inject
-    AuthCache authCache;
+    AuthenticationCache authCache;
 
     @Inject
     ConnectorProvider connectorProvider;
@@ -109,8 +110,8 @@ public class DataStoreImpl implements DataStore {
         anonAccessAllowed = config.getSecurity().isAllowAnonymousAccess();
         connector = connectorProvider.get();
 
-        // metricsTable = config.getMetricsTable(); // todo remove
-        // metaTable = config.getMetaTable(); // todo remove
+        metricsTable = config.getMetricsTable(); // todo remove
+        metaTable = config.getMetaTable(); // todo remove
     }
 
     @Override
@@ -528,7 +529,7 @@ public class DataStoreImpl implements DataStore {
             if (StringUtils.isEmpty(sessionId)) {
                 return Authorizations.EMPTY;
             } else {
-                Authorizations auths = AuthCache.getAuthorizations(sessionId);
+                Authorizations auths = authCache.getAuthorizations(sessionId);
                 if (null == auths) {
                     auths = Authorizations.EMPTY;
                 }
@@ -538,7 +539,7 @@ public class DataStoreImpl implements DataStore {
             if (StringUtils.isEmpty(sessionId)) {
                 throw new IllegalArgumentException("session id cannot be null");
             } else {
-                Authorizations auths = AuthCache.getAuthorizations(sessionId);
+                Authorizations auths = authCache.getAuthorizations(sessionId);
                 if (null == auths) {
                     throw new IllegalStateException("No auths found for sessionId: " + sessionId);
                 }

@@ -1,5 +1,11 @@
 package timely.test.integration.http;
 
+import com.fasterxml.jackson.core.TreeNode;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import org.apache.avro.data.Json;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.select.Elements;
@@ -10,6 +16,8 @@ import org.junit.experimental.categories.Category;
 import timely.api.request.VersionRequest;
 import timely.api.request.timeseries.QueryRequest;
 import timely.api.request.timeseries.QueryRequest.SubQuery;
+import timely.api.response.MetricResponse;
+import timely.api.response.timeseries.MetricsResponse;
 import timely.api.response.timeseries.QueryResponse;
 import timely.model.Metric;
 import timely.model.Tag;
@@ -20,6 +28,7 @@ import timely.test.integration.OneWaySSLBase;
 import timely.util.JsonUtil;
 
 import javax.net.ssl.HttpsURLConnection;
+import java.io.IOException;
 import java.io.OutputStream;
 import java.net.URL;
 import java.util.*;
@@ -100,7 +109,7 @@ public class HttpApiIT extends OneWaySSLBase {
     public void testMetricsJson() throws Exception {
         // @formatter:off
 
-        String expected = "{\"metrics\":[{\"metric\":\"sys.cpu.user\",\"tags\":[{\"key\":\"tag2\",\"value\":\"value2\"},{\"key\":\"tag1\",\"value\":\"value1\"}]},{\"metric\":\"sys.cpu.idle\",\"tags\":[{\"key\":\"tag4\",\"value\":\"value4\"},{\"key\":\"tag3\",\"value\":\"value3\"}]},{\"metric\":\"zzzz\",\"tags\":[{\"key\":\"host\",\"value\":\"localhost\"}]}]}";
+        String expected = "{\"metrics\":[{\"metric\":\"sys.cpu.user\",\"tags\":[{\"key\":\"tag1\",\"value\":\"value1\"},{\"key\":\"tag2\",\"value\":\"value2\"}]},{\"metric\":\"sys.cpu.idle\",\"tags\":[{\"key\":\"tag4\",\"value\":\"value4\"},{\"key\":\"tag3\",\"value\":\"value3\"}]},{\"metric\":\"zzzz\",\"tags\":[{\"key\":\"host\",\"value\":\"localhost\"}]}]}";
         put("sys.cpu.user " + TEST_TIME + " 1.0 tag1=value1 tag2=value2",
                 "sys.cpu.idle " + (TEST_TIME + 1) + " 1.0 tag3=value3 tag4=value4",
                 "sys.cpu.idle " + (TEST_TIME + 2) + " 1.0 tag3=value3 tag4=value4 viz=(a|b|c)",
@@ -111,6 +120,37 @@ public class HttpApiIT extends OneWaySSLBase {
         String metrics = "https://localhost:54322/api/metrics";
         // Test prefix matching
         String result = query(metrics, "application/json");
+
+        //Metric metricResult = JsonUtil.getObjectMapper().readValue(result, MetricResponse.class);
+        //Metric metricExpected = Metric.newBuilder();
+
+        ObjectMapper mapper = JsonUtil.getObjectMapper();
+        JsonNode json = mapper.readTree(result);
+        JsonNode metricsNode = json.get("metrics");
+
+        assertTrue(metricsNode.isArray());
+        // todo this blob of code is how things should be checked. Fix todos in MetricsResponse and this will work
+        // but right now, the MetricsResponse serializes metrics differently than the Metric class.
+        /*
+        List<Metric> metricList = new ArrayList<>();
+        metricsNode.forEach(m -> {
+                    try {
+                        System.out.println(m.toString());
+                        metricList.add(mapper.readValue(m.toString(), Metric.class));
+                    } catch (IOException e) {
+                        fail("IOException parsing Metric string");
+                    }
+                }
+        );
+
+        Metric m1 = Metric.newBuilder()
+                .name("sys.cpu.user")
+                .tag("tag1","value1")
+                .tag("tag2","value2")
+                .build();
+        assertTrue(metricList.contains(m1));
+        */
+
         assertEquals(expected, result);
         // @formatter:on
 

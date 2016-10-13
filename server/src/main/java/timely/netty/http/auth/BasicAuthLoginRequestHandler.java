@@ -7,11 +7,12 @@ import org.springframework.security.core.AuthenticationException;
 import timely.Configuration;
 import timely.api.request.auth.BasicAuthLoginRequest;
 import timely.auth.AuthenticationService;
+import timely.cache.AuthenticationCache;
 
 public class BasicAuthLoginRequestHandler extends TimelyLoginRequestHandler<BasicAuthLoginRequest> {
 
-    public BasicAuthLoginRequestHandler(Configuration conf) {
-        super(conf);
+    public BasicAuthLoginRequestHandler(Configuration conf, AuthenticationCache authCache) {
+        super(conf, authCache);
     }
 
     @Override

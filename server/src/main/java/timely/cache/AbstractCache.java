@@ -1,24 +1,25 @@
 package timely.cache;
 
+import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import timely.Configuration;
 
-import java.util.Collection;
 import java.util.Iterator;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 /**
  *
  */
-public abstract class AbstractCache<T> implements IterableCache<T> {
+public abstract class AbstractCache<K, V> implements IterableCache<K, V> {
 
     private static final Logger LOG = LoggerFactory.getLogger(AbstractCache.class);
     private static final Object DUMMY = new Object();
 
     private volatile boolean closed = true;
-    private volatile com.github.benmanes.caffeine.cache.Cache<T, Object> cache = null;
+    private volatile Cache<K, V> cache = null;
 
     public void initialize(long expirationMinutes, int initialCapacity, long maxCapacity) {
         LOG.info("Initializing Cache");
@@ -48,23 +49,23 @@ public abstract class AbstractCache<T> implements IterableCache<T> {
     public abstract void initialize(Configuration config);
 
     @Override
-    public void add(T t) {
-        cache.put(t, DUMMY);
+    public void add(K k, V v) {
+        cache.put(k, v);
     }
 
     @Override
-    public Object get(T t) {
-        return cache.getIfPresent(t);
+    public V get(K k) {
+        return cache.getIfPresent(k);
     }
 
     @Override
-    public boolean contains(T t) {
-        return cache.asMap().containsKey(t);
+    public boolean contains(K key) {
+        return cache.asMap().containsKey(key);
     }
 
     @Override
-    public void addAll(Collection<T> c) {
-        c.forEach(t -> cache.put(t, DUMMY));
+    public void addAll(Map<K, V> map) {
+        cache.putAll(map);
     }
 
     @Override
@@ -81,7 +82,7 @@ public abstract class AbstractCache<T> implements IterableCache<T> {
     }
 
     @Override
-    public Iterator<T> iterator() {
-        return cache.asMap().keySet().iterator();
+    public Iterator<V> iterator() {
+        return cache.asMap().values().iterator();
     }
 }

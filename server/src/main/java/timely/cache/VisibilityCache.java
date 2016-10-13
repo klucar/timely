@@ -5,7 +5,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import timely.Configuration;
 
-public class VisibilityCache extends AbstractCache<ColumnVisibility> {
+public class VisibilityCache extends AbstractCache<String, ColumnVisibility> {
 
     private static final Logger LOG = LoggerFactory.getLogger(VisibilityCache.class);
 

@@ -179,6 +179,7 @@ public class MetricsResponse {
             }
         });
 
+        // todo make this a class instead of building by hand here.
         ObjectNode metricsNode = mapper.createObjectNode();
         ArrayNode metricsArray = metricsNode.putArray("metrics");
         metricTagMap.forEach((metric, tags) -> {
@@ -189,6 +190,7 @@ public class MetricsResponse {
     }
 
     private static JsonNode createMetric(String metric, List<JsonNode> tags, ObjectMapper mapper) {
+        // todo use Metric class here!
         ObjectNode metricNode = mapper.createObjectNode();
         metricNode.put("metric", metric);
         ArrayNode tagsArray = metricNode.putArray("tags");
@@ -197,6 +199,7 @@ public class MetricsResponse {
     }
 
     private static JsonNode createTag(Meta meta, ObjectMapper mapper) {
+        // todo use Tag class here!
         ObjectNode tagNode = mapper.createObjectNode();
         tagNode.put("key", meta.getTagKey());
         tagNode.put("value", meta.getTagValue());

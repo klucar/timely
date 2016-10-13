@@ -3,5 +3,5 @@ package timely.cache;
 /**
  *
  */
-public interface IterableCache<T> extends Cache<T>, Iterable<T> {
+public interface IterableCache<K, V> extends Cache<K, V>, Iterable<V> {
 }

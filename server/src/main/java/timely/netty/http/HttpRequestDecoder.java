@@ -20,6 +20,7 @@ import timely.api.request.Request;
 import timely.api.response.StrictTransportResponse;
 import timely.api.response.TimelyException;
 import timely.cache.AuthCache;
+import timely.cache.AuthenticationCache;
 import timely.netty.Constants;
 
 import java.nio.charset.StandardCharsets;
@@ -33,13 +34,15 @@ public class HttpRequestDecoder extends MessageToMessageDecoder<FullHttpRequest>
     private static final String NO_AUTHORIZATIONS = "";
 
     private final Configuration conf;
+    private AuthenticationCache authenticationCache;
     private boolean anonymousAccessAllowed = false;
     private final String nonSecureRedirectAddress;
 
-    public HttpRequestDecoder(Configuration config) {
+    public HttpRequestDecoder(Configuration config, AuthenticationCache authenticationCache) {
         this.conf = config;
         this.anonymousAccessAllowed = conf.getSecurity().isAllowAnonymousAccess();
         this.nonSecureRedirectAddress = conf.getHttp().getRedirectPath();
+        this.authenticationCache = authenticationCache;
     }
 
     public static String getSessionId(FullHttpRequest msg, boolean anonymousAccessAllowed) {
@@ -112,7 +115,7 @@ public class HttpRequestDecoder extends MessageToMessageDecoder<FullHttpRequest>
             return;
         }
         try {
-            AuthCache.enforceAccess(conf, request);
+            authenticationCache.enforceAccess(conf, request);
         } catch (Exception e) {
             out.clear();
             throw e;

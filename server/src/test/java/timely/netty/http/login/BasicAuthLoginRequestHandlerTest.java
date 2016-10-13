@@ -1,5 +1,8 @@
 package timely.netty.http.login;
 
+import com.google.inject.Guice;
+import com.google.inject.Inject;
+import com.google.inject.Injector;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.http.DefaultFullHttpRequest;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
@@ -22,8 +25,10 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 
 import timely.Configuration;
+import timely.TestModule;
 import timely.api.request.auth.BasicAuthLoginRequest;
 import timely.cache.AuthCache;
+import timely.cache.AuthenticationCache;
 import timely.netty.Constants;
 import timely.netty.http.HttpRequestDecoder;
 import timely.netty.http.auth.BasicAuthLoginRequestHandler;
@@ -34,8 +39,8 @@ public class BasicAuthLoginRequestHandlerTest {
 
     private static class TestHttpQueryDecoder extends HttpRequestDecoder {
 
-        public TestHttpQueryDecoder(Configuration config) {
-            super(config);
+        public TestHttpQueryDecoder(Configuration config, AuthenticationCache authenticationCache) {
+            super(config, authenticationCache);
         }
 
         @Override
@@ -45,20 +50,25 @@ public class BasicAuthLoginRequestHandlerTest {
 
     }
 
+    @Inject
+    AuthenticationCache authenticationCache;
+
     private List<Object> results = new ArrayList<>();
 
     @BeforeClass
     public static void before() throws Exception {
-        AuthCache.setSessionMaxAge(TestConfiguration.createMinimalConfigurationForTest());
+        // AuthCache.setSessionMaxAge(TestConfiguration.createMinimalConfigurationForTest());
     }
 
     @AfterClass
     public static void after() throws Exception {
-        AuthCache.resetSessionMaxAge();
+        // AuthCache.resetSessionMaxAge();
     }
 
     @Before
     public void setup() throws Exception {
+        Injector injector = Guice.createInjector(new TestModule(TestConfiguration.createMinimalConfigurationForTest()));
+        injector.injectMembers(this);
         results.clear();
     }
 
@@ -76,13 +86,13 @@ public class BasicAuthLoginRequestHandlerTest {
         DefaultFullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/login");
         request.content().writeBytes(form.getBytes());
 
-        TestHttpQueryDecoder decoder = new TestHttpQueryDecoder(config);
+        TestHttpQueryDecoder decoder = new TestHttpQueryDecoder(config, authenticationCache);
         decoder.decode(null, request, results);
         Assert.assertEquals(1, results.size());
         Object result = results.iterator().next();
         Assert.assertEquals(BasicAuthLoginRequest.class, result.getClass());
 
-        BasicAuthLoginRequestHandler handler = new BasicAuthLoginRequestHandler(config);
+        BasicAuthLoginRequestHandler handler = new BasicAuthLoginRequestHandler(config, authenticationCache);
         CaptureChannelHandlerContext ctx = new CaptureChannelHandlerContext();
         handler.channelRead(ctx, result);
         Assert.assertNotNull(ctx.msg);
@@ -115,13 +125,13 @@ public class BasicAuthLoginRequestHandlerTest {
         DefaultFullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/login");
         request.content().writeBytes(form.getBytes());
 
-        TestHttpQueryDecoder decoder = new TestHttpQueryDecoder(config);
+        TestHttpQueryDecoder decoder = new TestHttpQueryDecoder(config, authenticationCache);
         decoder.decode(null, request, results);
         Assert.assertEquals(1, results.size());
         Object result = results.iterator().next();
         Assert.assertEquals(BasicAuthLoginRequest.class, result.getClass());
 
-        BasicAuthLoginRequestHandler handler = new BasicAuthLoginRequestHandler(config);
+        BasicAuthLoginRequestHandler handler = new BasicAuthLoginRequestHandler(config, authenticationCache);
         CaptureChannelHandlerContext ctx = new CaptureChannelHandlerContext();
         handler.channelRead(ctx, result);
         Assert.assertNotNull(ctx.msg);

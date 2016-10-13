@@ -1,5 +1,8 @@
 package timely.netty.websocket;
 
+import com.google.inject.Guice;
+import com.google.inject.Inject;
+import com.google.inject.Injector;
 import io.netty.channel.Channel;
 import io.netty.channel.local.LocalChannel;
 import io.netty.handler.codec.http.websocketx.CloseWebSocketFrame;
@@ -19,7 +22,9 @@ import org.junit.Test;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 
 import timely.Configuration;
+import timely.TestModule;
 import timely.api.request.MetricRequest;
+import timely.cache.AuthenticationCache;
 import timely.model.Metric;
 import timely.api.request.VersionRequest;
 import timely.api.request.subscription.AddSubscription;
@@ -58,30 +63,38 @@ public class WebSocketRequestDecoderTest {
     private static String cookie = null;
     private CaptureChannelHandlerContext ctx = new WebSocketCaptureChannelHandlerContext();
 
+    @Inject
+    AuthenticationCache authenticationCache;
+
     @BeforeClass
     public static void before() throws Exception {
         config = TestConfiguration.createMinimalConfigurationForTest();
         anonConfig = TestConfiguration.createMinimalConfigurationForTest();
         anonConfig.getSecurity().setAllowAnonymousAccess(true);
         cookie = URLEncoder.encode(UUID.randomUUID().toString(), StandardCharsets.UTF_8.name());
-        AuthCache.setSessionMaxAge(config);
-        AuthCache.getCache().put(cookie, new UsernamePasswordAuthenticationToken("test", "test1"));
+        // AuthCache.setSessionMaxAge(config);
+        // AuthCache.getCache().put(cookie, new
+        // UsernamePasswordAuthenticationToken("test", "test1"));
     }
 
     @AfterClass
     public static void after() {
-        AuthCache.resetSessionMaxAge();
+        // AuthCache.resetSessionMaxAge();
     }
 
     @Before
     public void setup() throws Exception {
+        Injector injector = Guice.createInjector(new TestModule(config));
+        injector.injectMembers(this);
+
+        authenticationCache.add(cookie, new UsernamePasswordAuthenticationToken("test", "test1"));
         results.clear();
         ctx = new WebSocketCaptureChannelHandlerContext();
     }
 
     @Test
     public void testVersion() throws Exception {
-        decoder = new WebSocketRequestDecoder(anonConfig);
+        decoder = new WebSocketRequestDecoder(anonConfig, authenticationCache);
         // @formatter:off
         String request = "{ "+
           "\"operation\" : \"version\"" +
@@ -96,7 +109,7 @@ public class WebSocketRequestDecoderTest {
 
     @Test
     public void testPutMetric() throws Exception {
-        decoder = new WebSocketRequestDecoder(anonConfig);
+        decoder = new WebSocketRequestDecoder(anonConfig, authenticationCache);
         // @formatter:off
         String request = "{" + 
           "\"operation\" : \"put\",\n" + 
@@ -126,7 +139,7 @@ public class WebSocketRequestDecoderTest {
 
     @Test
     public void testCreateSubscriptionWithMissingSessionId() throws Exception {
-        decoder = new WebSocketRequestDecoder(config);
+        decoder = new WebSocketRequestDecoder(config, authenticationCache);
         // @formatter:off
         String request = "{ "+ 
           "\"operation\" : \"create\", " +
@@ -146,7 +159,7 @@ public class WebSocketRequestDecoderTest {
     public void testCreateSubscriptionWithInvalidSessionIdAndNonAnonymousAccess() throws Exception {
         ctx.channel().attr(SubscriptionRegistry.SESSION_ID_ATTR)
                 .set(URLEncoder.encode(UUID.randomUUID().toString(), StandardCharsets.UTF_8.name()));
-        decoder = new WebSocketRequestDecoder(config);
+        decoder = new WebSocketRequestDecoder(config, authenticationCache);
         // @formatter:off
         String request = "{ "+ 
           "\"operation\" : \"create\", " +
@@ -165,7 +178,7 @@ public class WebSocketRequestDecoderTest {
     @Test
     public void testCreateSubscriptionWithValidSessionIdAndNonAnonymousAccess() throws Exception {
         ctx.channel().attr(SubscriptionRegistry.SESSION_ID_ATTR).set(cookie);
-        decoder = new WebSocketRequestDecoder(config);
+        decoder = new WebSocketRequestDecoder(config, authenticationCache);
         // @formatter:off
         String request = "{ " + 
           "\"operation\" : \"create\"," + 
@@ -181,7 +194,7 @@ public class WebSocketRequestDecoderTest {
 
     @Test
     public void testCreateSubscriptionWithoutSubscriptionId() throws Exception {
-        decoder = new WebSocketRequestDecoder(anonConfig);
+        decoder = new WebSocketRequestDecoder(anonConfig, authenticationCache);
         String request = "{ \"operation\" : \"create\" }";
         TextWebSocketFrame frame = new TextWebSocketFrame();
         frame.content().writeBytes(request.getBytes(StandardCharsets.UTF_8));
@@ -194,7 +207,7 @@ public class WebSocketRequestDecoderTest {
 
     @Test
     public void testCreateSubscription() throws Exception {
-        decoder = new WebSocketRequestDecoder(anonConfig);
+        decoder = new WebSocketRequestDecoder(anonConfig, authenticationCache);
         String request = "{ \"operation\" : \"create\", \"subscriptionId\" : \"1234\" }";
         TextWebSocketFrame frame = new TextWebSocketFrame();
         frame.content().writeBytes(request.getBytes(StandardCharsets.UTF_8));
@@ -207,7 +220,7 @@ public class WebSocketRequestDecoderTest {
 
     @Test
     public void testAddSubscription() throws Exception {
-        decoder = new WebSocketRequestDecoder(anonConfig);
+        decoder = new WebSocketRequestDecoder(anonConfig, authenticationCache);
         String request = "{ \"operation\" : \"add\", \"subscriptionId\" : \"1234\" }";
         TextWebSocketFrame frame = new TextWebSocketFrame();
         frame.content().writeBytes(request.getBytes(StandardCharsets.UTF_8));
@@ -220,7 +233,7 @@ public class WebSocketRequestDecoderTest {
 
     @Test
     public void testRemoveSubscription() throws Exception {
-        decoder = new WebSocketRequestDecoder(anonConfig);
+        decoder = new WebSocketRequestDecoder(anonConfig, authenticationCache);
         String request = "{ \"operation\" : \"remove\", \"subscriptionId\" : \"1234\" }";
         TextWebSocketFrame frame = new TextWebSocketFrame();
         frame.content().writeBytes(request.getBytes(StandardCharsets.UTF_8));
@@ -233,7 +246,7 @@ public class WebSocketRequestDecoderTest {
 
     @Test
     public void testCloseSubscription() throws Exception {
-        decoder = new WebSocketRequestDecoder(anonConfig);
+        decoder = new WebSocketRequestDecoder(anonConfig, authenticationCache);
         String request = "{ \"operation\" : \"close\", \"subscriptionId\" : \"1234\" }";
         TextWebSocketFrame frame = new TextWebSocketFrame();
         frame.content().writeBytes(request.getBytes(StandardCharsets.UTF_8));
@@ -246,7 +259,7 @@ public class WebSocketRequestDecoderTest {
 
     @Test
     public void testAggregrators() throws Exception {
-        decoder = new WebSocketRequestDecoder(anonConfig);
+        decoder = new WebSocketRequestDecoder(anonConfig, authenticationCache);
         String request = "{ \"operation\" : \"aggregators\", \"sessionId\" : \"1234\" }";
         TextWebSocketFrame frame = new TextWebSocketFrame();
         frame.content().writeBytes(request.getBytes(StandardCharsets.UTF_8));
@@ -259,7 +272,7 @@ public class WebSocketRequestDecoderTest {
 
     @Test
     public void testMetrics() throws Exception {
-        decoder = new WebSocketRequestDecoder(anonConfig);
+        decoder = new WebSocketRequestDecoder(anonConfig, authenticationCache);
         String request = "{ \"operation\" : \"metrics\", \"sessionId\" : \"1234\" }";
         TextWebSocketFrame frame = new TextWebSocketFrame();
         frame.content().writeBytes(request.getBytes(StandardCharsets.UTF_8));
@@ -315,7 +328,7 @@ public class WebSocketRequestDecoderTest {
         "    ]\n"+
         "}";
         // @formatter:on
-        decoder = new WebSocketRequestDecoder(anonConfig);
+        decoder = new WebSocketRequestDecoder(anonConfig, authenticationCache);
         TextWebSocketFrame frame = new TextWebSocketFrame();
         frame.content().writeBytes(request.getBytes(StandardCharsets.UTF_8));
         decoder.decode(ctx, frame, results);
@@ -328,7 +341,7 @@ public class WebSocketRequestDecoderTest {
     @Test
     public void testLookup() throws Exception {
         String request = "{ \"operation\" : \"lookup\", \"sessionId\" : \"1234\", \"metric\" : \"sys.cpu.user\" }";
-        decoder = new WebSocketRequestDecoder(anonConfig);
+        decoder = new WebSocketRequestDecoder(anonConfig, authenticationCache);
         TextWebSocketFrame frame = new TextWebSocketFrame();
         frame.content().writeBytes(request.getBytes(StandardCharsets.UTF_8));
         decoder.decode(ctx, frame, results);
@@ -351,7 +364,7 @@ public class WebSocketRequestDecoderTest {
     	        "    \"max\": 30\n" +    			
     			"}";
     	// @formatter:on
-        decoder = new WebSocketRequestDecoder(anonConfig);
+        decoder = new WebSocketRequestDecoder(anonConfig, authenticationCache);
         TextWebSocketFrame frame = new TextWebSocketFrame();
         frame.content().writeBytes(request.getBytes(StandardCharsets.UTF_8));
         decoder.decode(ctx, frame, results);

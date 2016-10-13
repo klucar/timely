@@ -1,5 +1,6 @@
 package timely.netty.http.auth;
 
+import com.google.inject.Inject;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
@@ -14,6 +15,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.security.core.Authentication;
 import timely.Configuration;
 import timely.cache.AuthCache;
+import timely.cache.AuthenticationCache;
 import timely.netty.Constants;
 import timely.netty.http.TimelyHttpHandler;
 
@@ -28,9 +30,12 @@ public abstract class TimelyLoginRequestHandler<T> extends SimpleChannelInboundH
     private final long maxAge;
     private final String domain;
 
-    public TimelyLoginRequestHandler(Configuration conf) {
+    AuthenticationCache authenticationCache;
+
+    public TimelyLoginRequestHandler(Configuration conf, AuthenticationCache authenticationCache) {
         maxAge = conf.getSecurity().getSessionMaxAge();
         domain = conf.getHttp().getHost();
+        this.authenticationCache = authenticationCache;
     }
 
     @Override
@@ -40,7 +45,7 @@ public abstract class TimelyLoginRequestHandler<T> extends SimpleChannelInboundH
             Authentication auth = authenticate(ctx, loginRequest);
             LOG.trace("Authenticated {}", auth);
             String sessionId = URLEncoder.encode(UUID.randomUUID().toString(), StandardCharsets.UTF_8.name());
-            AuthCache.getCache().put(sessionId, auth);
+            authenticationCache.add(sessionId, auth);
             FullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK);
             response.headers().set(Names.CONTENT_TYPE, Constants.JSON_TYPE);
             response.headers().set(Names.CONTENT_LENGTH, response.content().readableBytes());

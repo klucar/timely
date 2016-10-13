@@ -24,10 +24,8 @@ import io.netty.util.internal.SystemPropertyUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import timely.api.response.TimelyException;
-import timely.cache.AuthCache;
-import timely.cache.AuthorizationsCache;
+import timely.cache.AuthenticationCache;
 import timely.cache.MetaCache;
-import timely.cache.VisibilityCache;
 import timely.netty.http.*;
 import timely.netty.http.auth.BasicAuthLoginRequestHandler;
 import timely.netty.http.auth.X509LoginRequestHandler;
@@ -72,13 +70,10 @@ public class Server implements TimelyServer {
     protected DataStore dataStore;
 
     @Inject
-    AuthorizationsCache authorizationsCache;
+    AuthenticationCache authenticationCache;
 
     @Inject
     MetaCache metaCache;
-
-    @Inject
-    VisibilityCache visibilityCache;
 
     @Inject
     EventLoopGroup tcpWorkerGroup;
@@ -194,7 +189,7 @@ public class Server implements TimelyServer {
         LOG.info("Closing MetaCacheFactory");
         metaCache.close();
 
-        AuthCache.resetSessionMaxAge();
+        // AuthCache.resetSessionMaxAge();
 
         try {
             LOG.info("Flushing datastore.");
@@ -208,11 +203,12 @@ public class Server implements TimelyServer {
 
     @Override
     public void setup() {
-        AuthCache.setSessionMaxAge(config); // todo remove this old cache
+        // AuthCache.setSessionMaxAge(config); // todo remove this old cache
 
         // todo log other injection specifics i.e. log what was actually
         // injected?
-        // todo is setup method still needed?
+        // todo is setup method still needed? Most everything is configured by
+        // the TimelyModule
         LOG.info("Using channel class {}", channelClass.getSimpleName());
     }
 
@@ -256,7 +252,7 @@ public class Server implements TimelyServer {
         httpServer.group(httpBossGroup, httpWorkerGroup);
         httpServer.channel(channelClass);
         httpServer.handler(new LoggingHandler());
-        httpServer.childHandler(setupHttpChannel(sslCtx));
+        httpServer.childHandler(setupHttpChannel(sslCtx, authenticationCache));
         httpServer.option(ChannelOption.ALLOCATOR, PooledByteBufAllocator.DEFAULT);
         httpServer.option(ChannelOption.SO_BACKLOG, 128);
         httpServer.option(ChannelOption.SO_KEEPALIVE, true);
@@ -337,16 +333,18 @@ public class Server implements TimelyServer {
         return ssl.build();
     }
 
-    protected ChannelHandler setupHttpChannel(SslContext sslCtx) {
-        return new HttpChannelInitializer(sslCtx);
+    protected ChannelHandler setupHttpChannel(SslContext sslCtx, AuthenticationCache authenticationCache) {
+        return new HttpChannelInitializer(sslCtx, authenticationCache);
     }
 
     private class HttpChannelInitializer extends ChannelInitializer<SocketChannel> {
 
         SslContext sslCtx;
+        AuthenticationCache authCache;
 
-        HttpChannelInitializer(SslContext sslCtx) {
+        HttpChannelInitializer(SslContext sslCtx, AuthenticationCache authenticationCache) {
             this.sslCtx = sslCtx;
+            this.authCache = authenticationCache;
         }
 
         @Override
@@ -378,11 +376,11 @@ public class Server implements TimelyServer {
             CorsConfig cors = ccb.build();
             LOG.trace("Cors configuration: {}", cors);
             ch.pipeline().addLast("cors", new CorsHandler(cors));
-            ch.pipeline().addLast("queryDecoder", new timely.netty.http.HttpRequestDecoder(config));
+            ch.pipeline().addLast("queryDecoder", new timely.netty.http.HttpRequestDecoder(config, authCache));
             ch.pipeline().addLast("fileServer", new HttpStaticFileServerHandler());
             ch.pipeline().addLast("strict", new StrictTransportHandler(config));
-            ch.pipeline().addLast("login", new X509LoginRequestHandler(config));
-            ch.pipeline().addLast("doLogin", new BasicAuthLoginRequestHandler(config));
+            ch.pipeline().addLast("login", new X509LoginRequestHandler(config, authCache));
+            ch.pipeline().addLast("doLogin", new BasicAuthLoginRequestHandler(config, authCache));
             ch.pipeline().addLast("aggregators", new HttpAggregatorsRequestHandler());
             ch.pipeline().addLast("metrics", new HttpMetricsRequestHandler(metaCache));
             ch.pipeline().addLast("query", new HttpQueryRequestHandler(dataStore));
@@ -449,7 +447,7 @@ public class Server implements TimelyServer {
             ch.pipeline().addLast("sessionExtractor", new WebSocketHttpCookieHandler(config));
             ch.pipeline().addLast("idle-handler", new IdleStateHandler(config.getWebsocket().getTimeout(), 0, 0));
             ch.pipeline().addLast("ws-protocol", new WebSocketServerProtocolHandler(WS_PATH, null, true));
-            ch.pipeline().addLast("wsDecoder", new WebSocketRequestDecoder(config));
+            ch.pipeline().addLast("wsDecoder", new WebSocketRequestDecoder(config, authenticationCache));
             ch.pipeline().addLast("aggregators", new WSAggregatorsRequestHandler());
             ch.pipeline().addLast("metrics", new WSMetricsRequestHandler(metaCache));
             ch.pipeline().addLast("query", new WSQueryRequestHandler(dataStore));

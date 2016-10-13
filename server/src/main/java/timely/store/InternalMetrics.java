@@ -22,14 +22,10 @@ public class InternalMetrics {
     private AtomicDouble numMetricsReceived = new AtomicDouble(0);
     private AtomicDouble numMetaKeysInserted = new AtomicDouble(0);
     private AtomicDouble numMetricKeysInserted = new AtomicDouble(0);
-    private List<Tag> tags = new ArrayList<Tag>();
+    private List<Tag> tags = new ArrayList<>();
 
     public InternalMetrics() {
         super();
-        /*
-         * try { //hostName = InetAddress.getLocalHost().getHostName(); } catch
-         * (UnknownHostException e) { LOG.error("Error getting hostname", e); }
-         */
         tags.add(new Tag(HOSTNAME_TAG, hostName));
     }
 

@@ -10,7 +10,7 @@ import timely.Configuration;
 import timely.Server;
 import timely.adapter.accumulo.MetricWriter;
 import timely.adapter.accumulo.TableHelper;
-import timely.cache.AuthorizationsCache;
+import timely.cache.AuthenticationCache;
 import timely.cache.MetaCache;
 import timely.cache.VisibilityCache;
 import timely.guice.provider.ChannelClassProvider;
@@ -30,7 +30,7 @@ public class TimelyModule extends AbstractModule {
     protected final Configuration configuration;
 
     protected MetaCache metaCache;
-    protected AuthorizationsCache authsCache;
+    protected AuthenticationCache authsCache;
     protected VisibilityCache visCache;
 
     public TimelyModule(Configuration configuration) {
@@ -70,14 +70,14 @@ public class TimelyModule extends AbstractModule {
         metaCache = new MetaCache();
         metaCache.initialize(configuration);
 
-        authsCache = new AuthorizationsCache();
+        authsCache = new AuthenticationCache();
         authsCache.initialize(configuration);
 
         visCache = new VisibilityCache();
         visCache.initialize(configuration);
 
         bind(MetaCache.class).toInstance(metaCache);
-        bind(AuthorizationsCache.class).toInstance(authsCache);
+        bind(AuthenticationCache.class).toInstance(authsCache);
         bind(VisibilityCache.class).toInstance(visCache);
 
     }

@@ -3,21 +3,22 @@ package timely.cache;
 import timely.Configuration;
 
 import java.util.Collection;
+import java.util.Map;
 
 /**
  *
  */
-public interface Cache<T> {
+public interface Cache<K, V> {
 
     void initialize(Configuration config);
 
-    void add(T t);
+    void add(K k, V v);
 
-    Object get(T t);
+    V get(K k);
 
-    boolean contains(T t);
+    boolean contains(K key);
 
-    void addAll(Collection<T> c);
+    void addAll(Map<K, V> m);
 
     void close();
 

@@ -50,7 +50,7 @@ public abstract class MacITBase {
     public void startTimelyServer() throws Exception {
         injector = Guice.createInjector(new TestModule(conf));
         injector.injectMembers(this);
-        AuthCache.resetSessionMaxAge();
+        // AuthCache.resetSessionMaxAge();
         setupAndRunServer();
         connector = connectorProvider.get();
     }

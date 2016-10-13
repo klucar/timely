@@ -15,6 +15,7 @@ import timely.api.request.AuthenticatedRequest;
 import timely.api.request.WebSocketRequest;
 import timely.api.response.TimelyException;
 import timely.cache.AuthCache;
+import timely.cache.AuthenticationCache;
 import timely.subscription.SubscriptionRegistry;
 import timely.util.JsonUtil;
 
@@ -25,9 +26,11 @@ public class WebSocketRequestDecoder extends MessageToMessageDecoder<WebSocketFr
     private static final Logger LOG = LoggerFactory.getLogger(WebSocketRequestDecoder.class);
 
     private final Configuration conf;
+    private AuthenticationCache authCache;
 
-    public WebSocketRequestDecoder(Configuration conf) {
+    public WebSocketRequestDecoder(Configuration conf, AuthenticationCache authCache) {
         this.conf = conf;
+        this.authCache = authCache;
     }
 
     @Override
@@ -54,7 +57,7 @@ public class WebSocketRequestDecoder extends MessageToMessageDecoder<WebSocketFr
                 return;
             }
             try {
-                AuthCache.enforceAccess(conf, request);
+                authCache.enforceAccess(conf, request);
             } catch (TimelyException e) {
                 out.clear();
                 LOG.error("Error during access enforcment: " + e.getMessage());

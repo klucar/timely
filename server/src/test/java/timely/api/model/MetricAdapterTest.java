@@ -28,16 +28,11 @@ import timely.util.JsonUtil;
 
 public class MetricAdapterTest {
 
-    @Inject
-    VisibilityCache visibilityCache;
-
     @Before
     public void before() {
         Configuration config = new Configuration();
         Injector injector = Guice.createInjector(new TestModule(config));
         injector.injectMembers(this);
-
-        visibilityCache.initialize(config);
     }
 
     @Test
